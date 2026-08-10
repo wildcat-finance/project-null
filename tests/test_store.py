@@ -1,0 +1,49 @@
+import pytest
+
+from project_null.schema import Probe, Provenance, raw_expiry, stable_id
+from project_null.store import Store, StoreError
+
+NOW = "2026-08-11T00:00:00Z"
+
+
+def probe():
+    return Probe(
+        probe_id=stable_id("probe", {"seed": 1}),
+        scenario_id=stable_id("scenario", {"seed": 1}),
+        run_id=stable_id("run", {"seed": 1}), text="What is a market?",
+        provenance=Provenance.SYNTHETIC, generated_at=NOW,
+        raw_expires_at=raw_expiry(NOW),
+        generator={"kind": "template", "version": "v1", "seed": 1},
+    )
+
+
+def test_records_are_immutable(tmp_path):
+    store = Store(str(tmp_path / "null.db"))
+    item = probe()
+    store.append(item)
+    assert store.get(item.probe_id)["text"] == "What is a market?"
+    with pytest.raises(StoreError, match="already exists"):
+        store.append(item)
+    store.close()
+
+
+def test_expiry_and_probe_lookup(tmp_path):
+    store = Store(str(tmp_path / "null.db"))
+    item = probe()
+    store.append(item)
+    assert store.expired_raw("2026-09-09T23:59:59Z") == []
+    assert store.expired_raw("2026-09-10T00:00:00Z")[0]["probe_id"] == item.probe_id
+    assert store.list("probe", probe_id=item.probe_id)[0]["probe_id"] == item.probe_id
+
+
+def test_checkpoint_is_monotonic_and_controls_persist(tmp_path):
+    path = tmp_path / "null.db"
+    store = Store(str(path))
+    store.save_checkpoint("telegram", 10)
+    store.set_control("paused", "true")
+    store.close()
+    reopened = Store(str(path))
+    assert reopened.checkpoint("telegram") == 10
+    assert reopened.control("paused") == "true"
+    with pytest.raises(StoreError, match="backwards"):
+        reopened.save_checkpoint("telegram", 9)
