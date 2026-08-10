@@ -35,6 +35,13 @@ def update(update_id, text, *, user=7, bot=False, chat=-100):
     }}
 
 
+def bot_reply(update_id, text, reply_to):
+    item = update(update_id, text, user=8728174629, bot=True)
+    item["message"]["from"]["username"] = "ProjectAlephWildcat_bot"
+    item["message"]["reply_to_message"] = {"message_id": reply_to}
+    return item
+
+
 def shell(tmp_path, api):
     store = Store(str(tmp_path / "null.db"))
     instance = TelegramShell(
@@ -90,3 +97,24 @@ def test_commands_for_other_bots_and_ambient_text_are_ignored(tmp_path):
     instance, store = shell(tmp_path, api)
     instance.poll_once()
     assert store.list("probe") == []
+
+
+def test_aleph_reply_and_human_feedback_are_correlated(tmp_path):
+    api = FakeAPI([update(1, "/probe")])
+    instance, store = shell(tmp_path, api)
+    instance.poll_once()
+    delivery = store.list("delivery")[0]
+    api.updates = [bot_reply(
+        2, "I can't produce a supported answer right now.",
+        delivery["message_id"])]
+    instance.poll_once()
+    outcome = store.list("aleph_outcome")[0]
+    assert outcome["outcome"] == "abstained"
+    feedback = update(3, "/feedback corpus_gap answered missing documentation")
+    feedback["message"]["reply_to_message"] = {"message_id": 12}
+    api.updates = [feedback]
+    instance.poll_once()
+    saved = store.list("feedback")[0]
+    assert saved["probe_id"] == delivery["probe_id"]
+    assert saved["decision"] == "corpus_gap"
+    assert saved["expected_outcome"] == "answered"

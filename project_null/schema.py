@@ -43,7 +43,6 @@ class OutcomeKind(str, Enum):
     REFUSED = "refused"
     ABSTAINED = "abstained"
     FAILED = "failed"
-    SILENT = "silent"
 
 
 class Provenance(str, Enum):

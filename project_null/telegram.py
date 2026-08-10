@@ -10,10 +10,15 @@ import urllib.error
 import urllib.request
 from collections import defaultdict, deque
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Callable, Protocol
 
+from .capture import OutcomeCapture
 from .generator import Generator, MAX_BURST
-from .schema import Delivery, ScenarioFamily, raw_expiry, stable_id, utc_now
+from .schema import (
+    Delivery, Feedback, OutcomeKind, ReviewDecision, ScenarioFamily,
+    raw_expiry, stable_id, utc_now,
+)
 from .store import Store, StoreError
 
 
@@ -92,6 +97,7 @@ class TelegramShell:
         self.operator_user_ids = set(operator_user_ids)
         self.clock = clock
         self.limiter = limiter or RateLimiter()
+        self.capture = OutcomeCapture(store, clock)
         self.identity: Identity | None = None
 
     def startup(self) -> Identity:
@@ -134,9 +140,12 @@ class TelegramShell:
         chat = message.get("chat") or {}
         sender = message.get("from") or {}
         chat_id, user_id = chat.get("id"), sender.get("id")
-        if chat_id not in self.allowed_chat_ids or user_id not in self.operator_user_ids:
+        if chat_id not in self.allowed_chat_ids:
             return
         if sender.get("is_bot") is True:
+            self._observe_aleph(chat_id, sender, message)
+            return
+        if user_id not in self.operator_user_ids:
             return
         text = message.get("text")
         message_id = message.get("message_id")
@@ -173,8 +182,59 @@ class TelegramShell:
                 raise TelegramError("burst count must be an integer")
             self._generate(update_id, chat_id, message_id, count)
         elif command == "feedback":
-            self._reply(chat_id, message_id,
-                        "Feedback capture is not enabled in this build yet.")
+            self._feedback(chat_id, user_id, message_id, message, argument)
+
+    def _observe_aleph(self, chat_id: int, sender: dict, message: dict) -> None:
+        if str(sender.get("username") or "").casefold() != \
+                self.aleph_username.casefold():
+            return
+        reply_id = (message.get("reply_to_message") or {}).get("message_id")
+        text, message_id = message.get("text"), message.get("message_id")
+        if not isinstance(reply_id, int) or not isinstance(message_id, int) \
+                or not isinstance(text, str):
+            return
+        delivery = self.store.delivery_for_message(chat_id, reply_id)
+        if delivery is None:
+            return
+        observed = self.clock()
+        if isinstance(message.get("date"), int):
+            observed = datetime.fromtimestamp(
+                message["date"], timezone.utc).isoformat().replace("+00:00", "Z")
+        self.capture.observe(
+            probe_id=delivery["probe_id"], reply_message_id=message_id,
+            text=text, observed_at=observed)
+
+    def _feedback(self, chat_id: int, user_id: int, message_id: int,
+                  message: dict, argument: str) -> None:
+        parts = argument.split(maxsplit=2)
+        if len(parts) < 2:
+            raise TelegramError(
+                "feedback requires: <decision> <expected_outcome> [note]")
+        try:
+            decision, expected = ReviewDecision(parts[0]), OutcomeKind(parts[1])
+        except ValueError as error:
+            raise TelegramError("invalid feedback decision or outcome") from error
+        note = parts[2].strip() if len(parts) == 3 else "Reviewed in Telegram."
+        reply_id = (message.get("reply_to_message") or {}).get("message_id")
+        if not isinstance(reply_id, int):
+            raise TelegramError("feedback must reply to a probe or Aleph response")
+        delivery = self.store.delivery_for_message(chat_id, reply_id)
+        outcome = self.store.outcome_for_reply(reply_id)
+        probe_id = (delivery or outcome or {}).get("probe_id")
+        if not probe_id:
+            raise TelegramError("feedback reply is not correlated to a probe")
+        created = self.clock()
+        record = Feedback(
+            feedback_id=stable_id("feedback", {
+                "probe_id": probe_id, "reviewer": user_id,
+                "message_id": message_id}),
+            probe_id=probe_id, reviewer_user_id=user_id,
+            decision=decision, expected_outcome=expected, note=note,
+            created_at=created, raw_expires_at=raw_expiry(created))
+        if self.store.get(record.feedback_id) is None:
+            self.store.append(record)
+        self._reply(chat_id, message_id,
+                    f"Recorded {decision.value}; expected={expected.value}.")
 
     def _mode(self) -> ScenarioFamily | None:
         value = self.store.control("mode", "mixed")

@@ -21,7 +21,8 @@ needs Group Privacy disabled.
 - `/mode mixed|<family>` changes the versioned scenario mix.
 - `/pause` and `/resume` control generation durably.
 - `/status` reports mode, checkpoint, and unresolved review count.
-- `/feedback` is reserved until the review stage is installed.
+- `/feedback <decision> <expected_outcome> [note]` records a judgement when
+  sent as a reply to a probe or its Aleph response.
 
 Commands are accepted only from allowlisted operator IDs in allowlisted chats.
 Ambient text, commands for other bots, unapproved users, and bot-authored

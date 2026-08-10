@@ -98,6 +98,19 @@ class Store:
         return [json.loads(row["payload"]) for row in
                 self.connection.execute(query, params)]
 
+    def delivery_for_message(self, chat_id: int, message_id: int) -> dict | None:
+        return next((item for item in self.list("delivery")
+                     if item["chat_id"] == chat_id
+                     and item["message_id"] == message_id), None)
+
+    def outcome_for_reply(self, reply_message_id: int) -> dict | None:
+        return next((item for item in self.list("aleph_outcome")
+                     if item["reply_message_id"] == reply_message_id), None)
+
+    def scenario_for_probe(self, probe_id: str) -> dict | None:
+        probe = self.get(probe_id)
+        return self.get(probe["scenario_id"]) if probe else None
+
     def expired_raw(self, cutoff: str) -> list[dict]:
         rows = self.connection.execute(
             "SELECT payload FROM records WHERE raw_expires_at IS NOT NULL "
