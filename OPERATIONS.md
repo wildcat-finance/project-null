@@ -22,8 +22,8 @@ stays enabled. Neither bot needs group administrator access.
 - `/var/lib/project-null/artifacts` — run manifests, scrubbed audits, and
   immutable exports.
 
-The service starts paused on a fresh database. Only an allowlisted `/resume`
-command can enable probe generation.
+The service starts paused on a fresh database. Only an allowlisted, explicitly
+addressed `/resume@<NullBot>` command can enable probe generation.
 
 ## Rehearsal order
 
@@ -35,11 +35,12 @@ command can enable probe generation.
    and absent webhook.
 6. Add Null and Aleph to the private group and enable Bot-to-Bot Communication
    Mode for Null.
-7. Start the service and confirm `/status` reports paused.
-8. Send `/mode ordinary`, then `/resume`, then one `/probe`.
+7. Start the service and confirm `/status@<NullBot>` reports paused.
+8. Send `/mode@<NullBot> ordinary`, then `/resume@<NullBot>`, then one
+   `/probe@<NullBot>`.
 9. Confirm Aleph directly replies, Null records one outcome, and no loop occurs.
-10. Reply with `/feedback regression answered rehearsal` and inspect the
-    count-only audit.
+10. Reply with `/feedback@<NullBot> regression answered rehearsal` and inspect
+    the count-only audit.
 11. Re-pause before changing the question mix or widening access.
 
 ## Monitoring and failure alerts

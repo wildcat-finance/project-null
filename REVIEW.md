@@ -21,7 +21,7 @@ a `failed` outcome with `route=silence`.
 A reviewer replies to either the Null probe or the correlated Aleph response:
 
 ```text
-/feedback <decision> <expected_outcome> [note]
+/feedback@<NullBot> <decision> <expected_outcome> [note]
 ```
 
 Decisions are `regression`, `corpus_gap`, `routing_change`,

@@ -16,13 +16,16 @@ needs Group Privacy disabled.
 
 ## Commands
 
-- `/probe` sends one probe using the active mode.
-- `/burst <n>` sends 1–10 bounded probes.
-- `/mode mixed|<family>` changes the versioned scenario mix.
-- `/pause` and `/resume` control generation durably.
-- `/status` reports mode, checkpoint, and unresolved review count.
-- `/feedback <decision> <expected_outcome> [note]` records a judgement when
+- `/probe@<NullBot>` sends one probe using the active mode.
+- `/burst@<NullBot> <n>` sends 1–10 bounded probes.
+- `/mode@<NullBot> mixed|<family>` changes the versioned scenario mix.
+- `/pause@<NullBot>` and `/resume@<NullBot>` control generation durably.
+- `/status@<NullBot>` reports mode, checkpoint, and unresolved review count.
+- `/feedback@<NullBot> <decision> <expected_outcome> [note]` records a judgement when
   sent as a reply to a probe or its Aleph response.
+
+Use the explicit `@<NullBot>` form in groups. Under Group Privacy, a bare
+general command may be delivered to whichever bot most recently spoke instead.
 
 Commands are accepted only from allowlisted operator IDs in allowlisted chats.
 Ambient text, commands for other bots, unapproved users, and bot-authored
