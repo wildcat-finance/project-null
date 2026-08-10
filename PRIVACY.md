@@ -18,7 +18,8 @@ At a raw probe's expiry:
 Each raw record keeps its own non-sliding deadline. A review one second after a
 probe therefore expires one second later; it does not extend the probe's life.
 Long-term records preserve whether the source was synthetic,
-production-derived, or human-authored.
+production-derived, or human-authored. They retain only the source calendar
+date, not the exact message/probe timestamp.
 
 The test suite searches the compacted database bytes for unique fixture chat
 IDs and usernames after expiry. This demonstrates that Null's retained stores

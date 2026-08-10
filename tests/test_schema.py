@@ -55,7 +55,7 @@ def test_long_term_record_has_no_identity_fields():
         family=ScenarioFamily.ORDINARY,
         expected_outcome=OutcomeKind.ANSWERED,
         decision=ReviewDecision.REGRESSION,
-        source_created_at=NOW, anonymized_at=NOW,
+        source_date="2026-08-11", anonymized_at=NOW,
     )
     payload = to_dict(record)
     assert not {"chat_id", "user_id", "message_id"}.intersection(payload)

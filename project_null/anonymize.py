@@ -69,7 +69,7 @@ class Anonymizer:
                 family=ScenarioFamily(scenario["family"]),
                 expected_outcome=OutcomeKind(reviewed["expected_outcome"]),
                 decision=decision,
-                source_created_at=probe["generated_at"],
+                source_date=probe["generated_at"][:10],
                 anonymized_at=boundary)
             if self.store.get(question_id) is None:
                 self.store.append(question)

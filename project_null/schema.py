@@ -248,7 +248,7 @@ class AnonymizedQuestion:
     family: ScenarioFamily
     expected_outcome: OutcomeKind
     decision: ReviewDecision
-    source_created_at: str
+    source_date: str
     anonymized_at: str
 
     def __post_init__(self) -> None:
@@ -262,7 +262,8 @@ class AnonymizedQuestion:
             raise SchemaError("expected_outcome must be declared")
         if not isinstance(self.decision, ReviewDecision):
             raise SchemaError("decision must be declared")
-        parse_utc(self.source_created_at)
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", self.source_date):
+            raise SchemaError("source_date must be YYYY-MM-DD")
         parse_utc(self.anonymized_at)
 
 

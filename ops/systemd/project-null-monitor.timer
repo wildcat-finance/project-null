@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Project Null dependency monitor every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+Persistent=true
+Unit=project-null-monitor.service
+
+[Install]
+WantedBy=timers.target

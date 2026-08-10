@@ -86,17 +86,20 @@ class TelegramShell:
     def __init__(self, store: Store, generator: Generator, api: BotAPI,
                  *, aleph_username: str, allowed_chat_ids: set[int],
                  operator_user_ids: set[int], clock: Callable[[], str] = utc_now,
-                 limiter: RateLimiter | None = None):
+                 limiter: RateLimiter | None = None, poll_timeout: int = 30):
         if not re.fullmatch(r"[A-Za-z0-9_]{5,32}", aleph_username):
             raise TelegramError("aleph_username is invalid")
         if not allowed_chat_ids or not operator_user_ids:
             raise TelegramError("chat and operator allowlists must be non-empty")
+        if not 0 <= poll_timeout <= 50:
+            raise TelegramError("poll_timeout must be between 0 and 50 seconds")
         self.store, self.generator, self.api = store, generator, api
         self.aleph_username = aleph_username
         self.allowed_chat_ids = set(allowed_chat_ids)
         self.operator_user_ids = set(operator_user_ids)
         self.clock = clock
         self.limiter = limiter or RateLimiter()
+        self.poll_timeout = poll_timeout
         self.capture = OutcomeCapture(store, clock)
         self.identity: Identity | None = None
 
@@ -118,7 +121,7 @@ class TelegramShell:
             raise TelegramError("startup must pass before polling")
         offset = self.store.checkpoint("telegram")
         updates = self.api.call("getUpdates", {
-            "offset": offset, "timeout": 0, "limit": 100,
+            "offset": offset, "timeout": self.poll_timeout, "limit": 100,
             "allowed_updates": ["message"],
         })
         handled = 0

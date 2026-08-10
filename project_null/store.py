@@ -142,6 +142,16 @@ class Store:
         self.connection.execute("VACUUM")
         self.connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
+    def integrity(self) -> bool:
+        row = self.connection.execute("PRAGMA integrity_check").fetchone()
+        return bool(row and row[0] == "ok")
+
+    def counts(self) -> dict[str, int]:
+        return {row["record_type"]: int(row["count"])
+                for row in self.connection.execute(
+                    "SELECT record_type, COUNT(*) AS count FROM records "
+                    "GROUP BY record_type ORDER BY record_type")}
+
     def checkpoint(self, name: str) -> int:
         row = self.connection.execute(
             "SELECT next_id FROM checkpoints WHERE name = ?", (name,)).fetchone()

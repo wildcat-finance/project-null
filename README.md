@@ -139,3 +139,15 @@ Null is not:
 ## First milestone
 
 The first useful release sends a reproducible mixed batch to a private Telegram group, survives a restart without duplication, captures reply-based human judgements, and exports an anonymised review artifact. It does not need an elaborate generative model. The feedback loop is the product; creative question generation is one component.
+
+## Implementation status
+
+The repository now implements all offline dependencies for that milestone:
+versioned records, durable checkpoints, deterministic generation, Telegram
+commands and loop prevention, observable Aleph outcome capture, human review,
+secure anonymisation, immutable exports, run manifests, scrubbed audits,
+monitoring, maintenance, and hardened service units.
+
+`OPERATIONS.md` is the paused-first launch runbook. Live rehearsal is blocked on
+Null's separate Telegram token, the private chat/reviewer allowlists, and the
+BotFather Bot-to-Bot mode switch.

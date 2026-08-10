@@ -1,0 +1,27 @@
+[Unit]
+Description=Project Null one-shot dependency monitor
+
+[Service]
+Type=oneshot
+User=project-null
+Group=project-null
+WorkingDirectory=/opt/project-null
+EnvironmentFile=/etc/project-null/project-null.env
+ExecStart=/opt/project-null/.venv/bin/python /opt/project-null/monitor.py
+NoNewPrivileges=true
+CapabilityBoundingSet=
+DevicePolicy=closed
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths=/var/lib/project-null
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+UMask=0077

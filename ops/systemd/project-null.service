@@ -1,0 +1,46 @@
+[Unit]
+Description=Project Null Telegram feedback loop
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=project-null
+Group=project-null
+WorkingDirectory=/opt/project-null
+EnvironmentFile=/etc/project-null/project-null.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/project-null/.venv/bin/python /opt/project-null/serve.py
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+CapabilityBoundingSet=
+DevicePolicy=closed
+MemoryDenyWriteExecute=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectProc=invisible
+ProcSubset=pid
+ReadWritePaths=/var/lib/project-null
+RemoveIPC=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+SystemCallErrorNumber=EPERM
+SystemCallFilter=~@clock @cpu-emulation @debug @module @mount @obsolete @privileged @raw-io @reboot @swap
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
