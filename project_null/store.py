@@ -61,21 +61,26 @@ class Store:
             raise StoreError(f"transaction failed: {error}") from error
 
     def append(self, record: Record) -> None:
-        payload = to_dict(record)
-        identifier = record_id(record)
-        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"),
-                             ensure_ascii=False)
+        self.append_many([record])
+
+    def append_many(self, records: list[Record]) -> None:
+        rows = []
+        for record in records:
+            payload = to_dict(record)
+            identifier = record_id(record)
+            encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                                 ensure_ascii=False)
+            rows.append((record.record_type, identifier, encoded,
+                         payload.get("created_at") or payload.get("generated_at")
+                         or payload.get("delivered_at") or payload.get("observed_at")
+                         or payload.get("anonymized_at"),
+                         payload.get("raw_expires_at"), payload.get("probe_id")))
         try:
             with self.connection:
-                self.connection.execute(
-                    "INSERT INTO records VALUES (?, ?, ?, ?, ?, ?)",
-                    (record.record_type, identifier, encoded,
-                     payload.get("created_at") or payload.get("generated_at")
-                     or payload.get("delivered_at") or payload.get("observed_at")
-                     or payload.get("anonymized_at"),
-                     payload.get("raw_expires_at"), payload.get("probe_id")))
+                self.connection.executemany(
+                    "INSERT INTO records VALUES (?, ?, ?, ?, ?, ?)", rows)
         except sqlite3.IntegrityError as error:
-            raise StoreError(f"record {identifier} already exists") from error
+            raise StoreError("record already exists") from error
 
     def get(self, identifier: str) -> dict | None:
         row = self.connection.execute(

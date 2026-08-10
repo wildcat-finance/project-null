@@ -1,0 +1,41 @@
+import pytest
+
+from project_null.generator import Generator, MAX_BURST, catalog_hash
+from project_null.schema import Provenance, ScenarioFamily
+
+NOW = "2026-08-11T00:00:00Z"
+
+
+def test_generation_is_reproducible_and_declared():
+    generator = Generator(clock=lambda: NOW)
+    left = generator.generate(seed=42, index=3)
+    right = generator.generate(seed=42, index=3)
+    assert left == right
+    assert left.probe.provenance is Provenance.SYNTHETIC
+    assert left.probe.generator["catalog_sha256"] == catalog_hash()
+    assert left.scenario.expected_outcome.value
+
+
+def test_every_family_has_a_bounded_probe():
+    generator = Generator(clock=lambda: NOW)
+    for index, family in enumerate(ScenarioFamily):
+        item = generator.generate(seed=9, index=index, family=family)
+        assert item.scenario.family is family
+        assert 1 <= len(item.probe.text) <= 1000
+
+
+def test_abusive_family_uses_minimal_test_language():
+    generator = Generator(clock=lambda: NOW)
+    texts = [generator.generate(seed=1, index=i,
+                                family=ScenarioFamily.ABUSIVE).probe.text.lower()
+             for i in range(12)]
+    assert all("nigger" not in text for text in texts)
+    assert all("kill yourself" not in text for text in texts)
+
+
+def test_burst_is_bounded_and_unique():
+    generator = Generator(clock=lambda: NOW)
+    burst = generator.burst(seed=5, count=MAX_BURST)
+    assert len({item.probe.probe_id for item in burst}) == MAX_BURST
+    with pytest.raises(ValueError, match="between"):
+        generator.burst(seed=5, count=MAX_BURST + 1)

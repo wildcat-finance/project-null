@@ -50,6 +50,12 @@ The first interface should stay deliberately small:
 
 Null must be rate-limited, visibly identifiable, and unable to respond recursively to its own output or another bot's output. Group delivery should use explicit bot commands and replies rather than relying on plain `@mentions`, which Telegram privacy mode does not reliably deliver to bots.
 
+Null-to-Aleph delivery additionally requires Telegram's
+[Bot-to-Bot Communication Mode](https://core.telegram.org/api/bots%2Fbot-to-bot)
+for at least one bot. Null sends an explicit `/ask@ProjectAlephWildcat_bot`
+command, so Group Privacy can remain enabled and neither bot needs group-admin
+access. `TELEGRAM.md` defines the operational boundary and loop safeguards.
+
 ## Question mix
 
 A run samples from an explicit, versioned mix rather than unconstrained randomness:
