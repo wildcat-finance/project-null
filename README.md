@@ -89,6 +89,9 @@ Before longer retention:
 
 Anonymised questions and regression cases may then be retained indefinitely. Deletion and anonymisation must be automated, testable, and auditable. Generated questions are synthetic even when they resemble real traffic; they must never be relabelled as user questions.
 
+`PRIVACY.md` defines the executable deletion boundary. `EXPORTS.md` defines the
+separate, content-addressed regression and corpus-proposal artifacts.
+
 ## What must be built, in order
 
 ### 1. Define the records

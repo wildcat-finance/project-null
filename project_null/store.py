@@ -23,6 +23,7 @@ class Store:
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA journal_mode=WAL")
         self.connection.execute("PRAGMA synchronous=FULL")
+        self.connection.execute("PRAGMA secure_delete=ON")
         self.connection.executescript("""
             CREATE TABLE IF NOT EXISTS records (
                 record_type TEXT NOT NULL,
@@ -127,6 +128,19 @@ class Store:
                 f"DELETE FROM records WHERE record_id IN ({placeholders})",
                 tuple(identifiers))
         return cursor.rowcount
+
+    def delete_controls(self, prefix: str) -> int:
+        with self.connection:
+            cursor = self.connection.execute(
+                "DELETE FROM controls WHERE name LIKE ?", (prefix + "%",))
+        return cursor.rowcount
+
+    def compact(self) -> None:
+        """Remove deleted raw bytes from free pages and the WAL."""
+        self.connection.commit()
+        self.connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        self.connection.execute("VACUUM")
+        self.connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
     def checkpoint(self, name: str) -> int:
         row = self.connection.execute(
