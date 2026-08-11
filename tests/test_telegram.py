@@ -3,9 +3,11 @@ import re
 
 import pytest
 
+from project_null.coverage import CoveragePlan, CoverageTarget
 from project_null.generator import Generator
 from project_null.schema import (
-    CandidateDisposition, CandidateResolution, stable_id,
+    CandidateDisposition, CandidateResolution, OutcomeKind, ScenarioFamily,
+    stable_id,
 )
 from project_null.store import Store
 from project_null.telegram import (
@@ -58,15 +60,37 @@ def bot_reply(update_id, text, reply_to):
     return item
 
 
-def shell(tmp_path, api, clock=lambda: NOW):
+def shell(tmp_path, api, clock=lambda: NOW, coverage=None):
     store = Store(str(tmp_path / "null.db"))
     instance = TelegramShell(
         store, Generator(clock=lambda: NOW), api,
         aleph_username="ProjectAlephWildcat_bot",
         aleph_bot_id=8728174629,
-        allowed_chat_ids={-100}, operator_user_ids={7}, clock=clock)
+        allowed_chat_ids={-100}, operator_user_ids={7}, clock=clock,
+        coverage=coverage)
     instance.startup()
     return instance, store
+
+
+def coverage_plan():
+    targets = (
+        CoverageTarget(
+            target_id="coverage-withdrawal-lifecycle-declared-gap",
+            topic="withdrawal-lifecycle", kind="declared-gap",
+            family=ScenarioFamily.ORDINARY,
+            expected=OutcomeKind.ANSWERED, tier="contextual",
+            text="How does a partly paid withdrawal batch finish?"),
+        CoverageTarget(
+            target_id="coverage-false-premises-route-boundary",
+            topic="false-premises", kind="route-boundary",
+            family=ScenarioFamily.FALSE_PREMISE,
+            expected=OutcomeKind.ANSWERED, tier="adversarial",
+            text="Which governance vote changed the APR?"),
+    )
+    return CoveragePlan(
+        silhouette_id="a" * 20, release_id="b" * 20,
+        evaluation_id="c" * 20, document_sha256="d" * 64,
+        targets=targets, declared_gaps=1, evaluation_total=143)
 
 
 def test_probe_is_addressed_to_aleph_and_checkpointed(tmp_path):
@@ -79,6 +103,26 @@ def test_probe_is_addressed_to_aleph_and_checkpointed(tmp_path):
     assert probe_sends[0]["text"].startswith("/ask@ProjectAlephWildcat_bot ")
     assert len(store.list("probe")) == len(store.list("delivery")) == 1
     assert store.checkpoint("telegram") == 2
+
+
+def test_status_and_mixed_burst_expose_only_coverage_identity_and_counts(tmp_path):
+    api = FakeAPI([
+        update(1, "/status@ProjectNull_bot"),
+        update(2, "/burst@ProjectNull_bot 6"),
+    ])
+    plan = coverage_plan()
+    instance, store = shell(tmp_path, api, coverage=plan)
+    instance.poll_once()
+
+    replies = [payload["text"] for method, payload in api.calls
+               if method == "sendMessage"]
+    assert any(f"coverage={plan.silhouette_id}/{plan.release_id}" in text
+               and "coverage_targets=2" in text for text in replies)
+    probes = store.list("probe")
+    assert sum(item["generator"]["kind"] == "coverage_challenge"
+               for item in probes) == 2
+    assert all("Which governance vote" not in text for text in replies
+               if "coverage=" in text)
 
 
 def test_restart_does_not_resend_a_prepared_probe(tmp_path):

@@ -59,7 +59,7 @@ explicit `@<NullBot>` form:
   without losing state; and
 - `/status@<NullBot>` — show the current run, mode, rate limit, checkpoint,
   unresolved reviews, unresolved finalised-candidate pile, and downstream
-  resolved count.
+  resolved count, plus the active Aleph coverage identity when configured.
 
 Null must be rate-limited, visibly identifiable, and unable to respond recursively to its own output or another bot's output. Group delivery should use explicit bot commands and replies rather than relying on plain `@mentions`, which Telegram privacy mode does not reliably deliver to bots.
 
@@ -109,6 +109,28 @@ requirements, duplicates, and discards remain useful evidence but do not count
 as mastery. `/status` exposes only scrubbed counts and the active curriculum
 version.
 
+### Coverage-guided sophistication
+
+Null can consume Aleph's answer-free coverage silhouette to look for neglected
+topics and route boundaries without seeing Aleph's questions, answers, corpus
+text, citations, or human identities. The artifact is content-addressed and
+must match an explicitly configured active Aleph release. Null rejects changed
+hashes, inconsistent counts, leaked content fields, addresses, URLs, or a
+boundary that permits factual grading or autonomous corpus writes.
+
+In mixed mode, every third slot is selected from the silhouette-derived target
+set. Declared-gap topics are exercised before other unseen route, live, sparse,
+or coverage edges. The actual questions still come from Null's checked-in local
+templates; the silhouette supplies shape, never facts or expected answer text.
+Single-family mode remains catalogue-only so a reviewer can rehearse one family
+without the coverage scheduler intervening. If no silhouette is configured,
+generation is the ordinary novelty curriculum.
+
+Each coverage-guided probe records the silhouette, release, evaluation, topic,
+and target kind in raw generator provenance. Long-term exposure memory retains
+only the target ID and silhouette file hash, not the rendered question. Human
+review remains the only path from a result to a regression or factual proposal.
+
 ## Data and privacy
 
 Raw inbound questions and associated Telegram identifiers may be retained for at most **30 days** for debugging and review.
@@ -149,7 +171,9 @@ confirms no delivery record and never retries that prepared probe automatically.
 
 Use a versioned three-tier challenge catalogue for each family, deterministic
 seeded selection, durable novelty memory, and advancement based only on human
-review. Add model-generated variants only behind a strict envelope: declared
+review. An optional validated Aleph coverage silhouette schedules unseen
+boundary probes at a fixed interval while preserving catalogue fallback. Add
+model-generated variants only behind a strict envelope: declared
 intent, bounded length, provenance, reproducible settings, and no claim that
 generated facts are real.
 
@@ -205,7 +229,8 @@ The repository implements the full first-milestone system: versioned records,
 durable checkpoints, deterministic generation, Telegram commands and loop
 prevention, observable Aleph outcome capture, human review, secure
 anonymisation, immutable exports, downstream candidate acknowledgements, run
-manifests, scrubbed audits, monitoring, maintenance, and hardened service units.
+manifests, scrubbed audits, monitoring, maintenance, hardened service units,
+and optional answer-free Aleph coverage targeting.
 
 The reference deployment has its separate token and allowlists installed,
 Bot-to-Bot Communication Mode enabled for Null, and Null's numeric ID authorized

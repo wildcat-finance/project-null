@@ -29,3 +29,10 @@ Finalisation is irreversible and is never inferred from ordinary feedback.
 The test suite searches the compacted database bytes for unique fixture chat
 IDs and usernames after expiry. This demonstrates that Null's retained stores
 cannot join an anonymised candidate back to a Telegram identity.
+
+An Aleph coverage silhouette is safe for long-term operational use only because
+its schema excludes question, answer, corpus, citation, address, URL, and human
+identity content. Null validates that exclusion boundary before use. Coverage
+exposure records retain a local target ID and silhouette file hash, never the
+rendered probe or any Aleph evidence. The silhouette cannot grade an answer or
+authorize a corpus write.

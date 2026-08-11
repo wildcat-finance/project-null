@@ -12,6 +12,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import Callable, Protocol
 
+from .coverage import CoveragePlan
 from .anonymize import AnonymizationError, Anonymizer
 from .capture import OutcomeCapture
 from .curriculum import derive as derive_curriculum, remember_exposure
@@ -104,7 +105,8 @@ class TelegramShell:
                  *, aleph_username: str, aleph_bot_id: int,
                  allowed_chat_ids: set[int],
                  operator_user_ids: set[int], clock: Callable[[], str] = utc_now,
-                 limiter: RateLimiter | None = None, poll_timeout: int = 30):
+                 limiter: RateLimiter | None = None, poll_timeout: int = 30,
+                 coverage: CoveragePlan | None = None):
         if not re.fullmatch(r"[A-Za-z0-9_]{5,32}", aleph_username):
             raise TelegramError("aleph_username is invalid")
         if (isinstance(aleph_bot_id, bool) or not isinstance(aleph_bot_id, int)
@@ -128,6 +130,7 @@ class TelegramShell:
         self.clock = clock
         self.limiter = limiter or RateLimiter()
         self.poll_timeout = poll_timeout
+        self.coverage = coverage
         self.capture = OutcomeCapture(store, clock)
         self.identity: Identity | None = None
 
@@ -517,6 +520,10 @@ class TelegramShell:
         tier_counts = ",".join(
             f"{tier}:{count}"
             for tier, count in curriculum["tier_counts"].items())
+        coverage = (f"{self.coverage.silhouette_id}/"
+                    f"{self.coverage.release_id}; "
+                    f"coverage_targets={len(self.coverage.targets)}"
+                    if self.coverage is not None else "disabled")
         self._reply(
             chat_id, message_id,
             f"Null is {'paused' if paused else 'running'}; "
@@ -527,6 +534,7 @@ class TelegramShell:
             f"candidate_pile={candidates.unresolved}; "
             f"candidate_resolved={candidates.resolved}; "
             f"curriculum={curriculum['version']}; tiers={tier_counts}; "
+            f"coverage={coverage}; "
             f"checkpoint={self.store.checkpoint('telegram')}.")
 
     def _generate(self, update_id: int, chat_id: int,
@@ -539,7 +547,8 @@ class TelegramShell:
         curriculum = derive_curriculum(self.store)
         generated = self.generator.burst(
             seed=update_id, count=count, family=self._mode(),
-            tiers=curriculum.tiers, seen_texts=curriculum.seen_texts)
+            tiers=curriculum.tiers, seen_texts=curriculum.seen_texts,
+            coverage=self.coverage)
         sent = 0
         for item in generated:
             if self._send_probe(chat_id, command_message_id, item):

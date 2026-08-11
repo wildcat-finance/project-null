@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from project_null.coverage import CoveragePlan, CoverageTarget
 from project_null.generator import (
     CURRICULUM_VERSION, Generator, MIXED_POLICY_VERSION,
 )
@@ -10,6 +11,7 @@ from project_null.operations import (
     record_peer_reply_evidence, write_audit,
 )
 from project_null.store import Store
+from project_null.schema import OutcomeKind, ScenarioFamily
 
 
 class API:
@@ -33,18 +35,39 @@ def environment(tmp_path):
     }
 
 
+def coverage_plan():
+    return CoveragePlan(
+        silhouette_id="a" * 20, release_id="b" * 20,
+        evaluation_id="c" * 20, document_sha256="d" * 64,
+        targets=(CoverageTarget(
+            target_id="coverage-false-premises-route-boundary",
+            topic="false-premises", kind="route-boundary",
+            family=ScenarioFamily.FALSE_PREMISE,
+            expected=OutcomeKind.ANSWERED, tier="adversarial",
+            text="Which governance vote changed the APR?"),),
+        declared_gaps=0, evaluation_total=143)
+
+
 def test_public_configuration_and_run_hide_identity_and_token(tmp_path):
-    config = Config.from_env(environment(tmp_path))
-    record = publish_run(config, "2026-08-11T00:00:00Z")
+    env = environment(tmp_path)
+    env["NULL_ALEPH_COVERAGE"] = str(tmp_path / "silhouette.json")
+    env["NULL_ALEPH_COVERAGE_RELEASE"] = "b" * 20
+    config = Config.from_env(env)
+    coverage = coverage_plan()
+    record = publish_run(
+        config, "2026-08-11T00:00:00Z", coverage)
     serialized = json.dumps(record)
     assert "must-never-appear" not in serialized
     assert "987654321" not in serialized
     assert record["configuration"]["allowed_chat_count"] == 1
     assert record["configuration"]["aleph_bot_id"] == 8728174629
+    assert record["coverage"]["silhouette_id"] == "a" * 20
+    assert "Which governance" not in serialized
     assert (record["configuration"]["mixed_policy_version"]
             == MIXED_POLICY_VERSION)
     assert record["configuration"]["curriculum_version"] == CURRICULUM_VERSION
-    assert publish_run(config, "2026-08-11T00:00:00Z") == record
+    assert publish_run(
+        config, "2026-08-11T00:00:00Z", coverage) == record
 
 
 def test_config_requires_explicit_allowlists(tmp_path):
@@ -62,22 +85,55 @@ def test_config_requires_explicit_allowlists(tmp_path):
                          "NULL_ALEPH_BOT_ID": "8728174629"})
 
 
+def test_coverage_configuration_requires_a_path_and_release_pair(tmp_path):
+    env = environment(tmp_path)
+    env["NULL_ALEPH_COVERAGE"] = str(tmp_path / "silhouette.json")
+    with pytest.raises(OperationsError, match="must be set together"):
+        Config.from_env(env)
+    env["NULL_ALEPH_COVERAGE_RELEASE"] = "not-a-release"
+    with pytest.raises(OperationsError, match="20-character hexadecimal"):
+        Config.from_env(env)
+    env["NULL_ALEPH_COVERAGE_RELEASE"] = "a" * 20
+    config = Config.from_env(env)
+    assert config.public()["coverage_configured"] is True
+    assert config.public()["coverage_release_id"] == "a" * 20
+
+
 def test_health_and_audit_are_scrubbed(tmp_path):
-    config = Config.from_env(environment(tmp_path))
+    env = environment(tmp_path)
+    env["NULL_ALEPH_COVERAGE"] = str(tmp_path / "silhouette.json")
+    env["NULL_ALEPH_COVERAGE_RELEASE"] = "b" * 20
+    config = Config.from_env(env)
     store = Store(config.db_path)
     store.set_control("paused", "true")
-    report = health_report(store, API(), config)
+    coverage = coverage_plan()
+    report = health_report(store, API(), config, coverage)
     assert report["ok"] is True
     assert report["candidates"] == {
         "total": 0, "resolved": 0, "unresolved": 0}
     assert report["curriculum"]["version"] == CURRICULUM_VERSION
+    assert report["coverage"]["silhouette_id"] == "a" * 20
+    assert "Which governance" not in json.dumps(report)
     assert report["telegram"]["bot_to_bot_mode"] == "not_exposed_by_bot_api"
     assert report["telegram"]["peer_reply_evidence"] == {
         "captured": False, "count": 0, "last_observed_at": None}
-    path = write_audit(store, config, "run_123", "2026-08-11T00:00:00Z")
+    path = write_audit(
+        store, config, "run_123", "2026-08-11T00:00:00Z", coverage)
     data = path.read_text()
     assert "987654321" not in data and "must-never-appear" not in data
+    assert "Which governance" not in data
     assert path.stat().st_mode & 0o777 == 0o600
+
+
+def test_health_fails_when_loaded_coverage_differs_from_configured_release(
+        tmp_path):
+    env = environment(tmp_path)
+    env["NULL_ALEPH_COVERAGE"] = str(tmp_path / "silhouette.json")
+    env["NULL_ALEPH_COVERAGE_RELEASE"] = "e" * 20
+    config = Config.from_env(env)
+    store = Store(config.db_path)
+
+    assert health_report(store, API(), config, coverage_plan())["ok"] is False
 
 
 def test_audit_writes_only_run_and_state_transitions(tmp_path):
