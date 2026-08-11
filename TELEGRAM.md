@@ -28,6 +28,8 @@ Null's capability: Aleph accepts only the explicit command form above.
 - `/status@<NullBot>` reports mode, checkpoint, and unresolved review count.
 - `/feedback@<NullBot> <decision> <expected_outcome> [note]` records a judgement when
   sent as a reply to a probe or its Aleph response.
+- `/finalize@<NullBot>` finalises the latest judgement for the replied-to probe,
+  creates its anonymised candidate, and irreversibly purges the raw correlation.
 
 Use the explicit `@<NullBot>` form in groups. Under Group Privacy, a bare
 general command may be delivered to whichever bot most recently spoke instead.
@@ -62,6 +64,10 @@ The live process will require:
 - `NULL_TELEGRAM_TOKEN` — Null's separate Bot API token;
 - the allowlisted developer-group chat ID;
 - the allowlisted reviewer/operator user IDs; and
-- Aleph's bot username, defaulting to `ProjectAlephWildcat_bot`.
+- Aleph's bot username, defaulting to `ProjectAlephWildcat_bot`; and
+- Aleph's stable numeric bot ID in `NULL_ALEPH_BOT_ID`.
+
+Null requires both Aleph identity fields to match before recording a bot reply.
+Group commands without an explicit `@<NullBot>` target are ignored.
 
 Tokens never enter the SQLite store, logs, generated records, or repository.

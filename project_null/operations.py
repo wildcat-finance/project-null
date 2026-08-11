@@ -24,6 +24,7 @@ class Config:
     db_path: str
     artifacts_path: str
     aleph_username: str
+    aleph_bot_id: int
     allowed_chat_ids: frozenset[int]
     operator_user_ids: frozenset[int]
     poll_timeout: int = 30
@@ -32,6 +33,10 @@ class Config:
     def __post_init__(self) -> None:
         if not 0 <= self.poll_timeout <= 50:
             raise OperationsError("NULL_POLL_TIMEOUT must be between 0 and 50")
+        if (isinstance(self.aleph_bot_id, bool)
+                or not isinstance(self.aleph_bot_id, int)
+                or self.aleph_bot_id <= 0):
+            raise OperationsError("NULL_ALEPH_BOT_ID must be a positive integer")
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] = os.environ):
@@ -43,17 +48,28 @@ class Config:
                 raise OperationsError(f"{name} must be comma-separated integers") from error
             if not parsed:
                 raise OperationsError(f"{name} must be non-empty")
+            if name == "NULL_ALLOWED_CHAT_IDS" and any(
+                    value >= 0 for value in parsed):
+                raise OperationsError(
+                    "NULL_ALLOWED_CHAT_IDS must contain group chat IDs")
+            if name == "NULL_OPERATOR_USER_IDS" and any(
+                    value <= 0 for value in parsed):
+                raise OperationsError(
+                    "NULL_OPERATOR_USER_IDS must contain positive user IDs")
             return parsed
 
         try:
             poll_timeout = int(env.get("NULL_POLL_TIMEOUT", "30"))
+            aleph_bot_id = int(env.get("NULL_ALEPH_BOT_ID", ""))
         except ValueError as error:
-            raise OperationsError("NULL_POLL_TIMEOUT must be an integer") from error
+            raise OperationsError(
+                "NULL_POLL_TIMEOUT and NULL_ALEPH_BOT_ID must be integers") from error
         return cls(
             db_path=env.get("NULL_DB", "state/null.db"),
             artifacts_path=env.get("NULL_ARTIFACTS", "artifacts"),
             aleph_username=env.get(
                 "NULL_ALEPH_USERNAME", "ProjectAlephWildcat_bot"),
+            aleph_bot_id=aleph_bot_id,
             allowed_chat_ids=ids("NULL_ALLOWED_CHAT_IDS"),
             operator_user_ids=ids("NULL_OPERATOR_USER_IDS"),
             poll_timeout=poll_timeout,
@@ -63,6 +79,7 @@ class Config:
     def public(self) -> dict:
         return {
             "aleph_username": self.aleph_username,
+            "aleph_bot_id": self.aleph_bot_id,
             "allowed_chat_count": len(self.allowed_chat_ids),
             "operator_count": len(self.operator_user_ids),
             "poll_timeout": self.poll_timeout,

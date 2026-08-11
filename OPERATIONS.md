@@ -48,7 +48,10 @@ addressed `/resume@<NullBot>` command can enable probe generation.
 10. Confirm Aleph directly replies, Null records one outcome, and no loop occurs.
 11. Reply with `/feedback@<NullBot> regression answered rehearsal` and inspect
     the count-only audit.
-12. Re-pause before changing the question mix or widening access.
+12. Reply with `/finalize@<NullBot>`, run one maintenance pass, and verify the
+    immutable regression export contains one candidate while the raw probe link
+    is gone.
+13. Re-pause before changing the question mix or widening access.
 
 If the rehearsal is abandoned, remove Null's ID from `ALEPH_PEER_BOT_IDS` and
 restart Aleph. Do not leave a peer authorized merely because both bots have been

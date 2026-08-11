@@ -33,3 +33,16 @@ Feedback is accepted only from allowlisted reviewers. The reviewer identifier
 and note are raw records with the same exact 30-day expiry as other identifiable
 data. Review changes the proposed expected outcome; it never edits Aleph's
 corpus and never promotes a candidate automatically.
+
+When the latest judgement is correct, the reviewer replies once more with:
+
+```text
+/finalize@<NullBot>
+```
+
+Finalisation is the explicit promotion boundary. Null creates a redacted,
+non-linkable long-term question and proposal, then deletes the probe, delivery,
+outcome, feedback, and delivery control before acknowledging success. Duplicate
+and discard decisions create no candidate but still purge the raw linkage.
+Without finalisation, raw state expires automatically at its exact deadline and
+the latest eligible judgement is retained then.

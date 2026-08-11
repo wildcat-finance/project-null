@@ -66,3 +66,51 @@ def test_unreviewed_and_discarded_questions_do_not_survive(tmp_path):
     Anonymizer(store).run("2026-09-10T00:00:00Z")
     assert store.list("anonymized_question") == []
     assert store.list("export_candidate") == []
+
+
+def test_explicit_finalize_exports_now_and_purges_raw_link(tmp_path):
+    path = tmp_path / "null.db"
+    store = Store(str(path))
+    generated = Generator(clock=lambda: START).generate(seed=12)
+    store.append_many([generated.scenario, generated.probe])
+    delivery = Delivery(
+        delivery_id=stable_id("delivery", {"finalize": 987654321}),
+        probe_id=generated.probe.probe_id, chat_id=-100987654321,
+        message_id=987654321, thread_id=None, delivered_at=START,
+        raw_expires_at=raw_expiry(START))
+    store.append(delivery)
+    store.set_control(f"delivery:{generated.probe.probe_id}", "sent")
+    feedback = Feedback(
+        feedback_id=stable_id("feedback", {"finalize": 1}),
+        probe_id=generated.probe.probe_id, reviewer_user_id=7,
+        decision=ReviewDecision.REGRESSION,
+        expected_outcome=OutcomeKind.ANSWERED, note="Keep as a regression",
+        created_at=START, raw_expires_at=raw_expiry(START))
+    store.append(feedback)
+    report = Anonymizer(store).finalize(
+        generated.probe.probe_id, "2026-08-11T00:00:01Z")
+    assert report.anonymized == report.candidates == 1
+    assert report.deleted_raw == 3 and report.deleted_controls == 1
+    assert store.list("probe") == store.list("delivery") == \
+        store.list("feedback") == []
+    assert len(store.list("anonymized_question")) == 1
+    assert len(store.list("export_candidate")) == 1
+    store.close()
+    assert b"-100987654321" not in path.read_bytes()
+
+
+def test_expiry_deletes_raw_even_when_candidate_state_is_incomplete(tmp_path):
+    store = Store(str(tmp_path / "null.db"))
+    generated = Generator(clock=lambda: START).generate(seed=13)
+    store.append_many([generated.scenario, generated.probe])
+    feedback = Feedback(
+        feedback_id=stable_id("feedback", {"incomplete": 1}),
+        probe_id=generated.probe.probe_id, reviewer_user_id=7,
+        decision=ReviewDecision.REGRESSION,
+        expected_outcome=OutcomeKind.ANSWERED, note="Scenario was lost",
+        created_at=START, raw_expires_at=raw_expiry(START))
+    store.append(feedback)
+    store.delete_records([generated.scenario.scenario_id])
+    report = Anonymizer(store).run("2026-09-10T00:00:00Z")
+    assert report.anonymized == report.candidates == 0
+    assert store.list("probe") == store.list("feedback") == []

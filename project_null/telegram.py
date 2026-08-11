@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable, Protocol
 
+from .anonymize import AnonymizationError, Anonymizer
 from .capture import OutcomeCapture
 from .generator import Generator, MAX_BURST
 from .schema import (
@@ -60,6 +61,8 @@ class TelegramHTTP:
 class RateLimiter:
     def __init__(self, limit: int = 6, window: int = 60,
                  clock: Callable[[], float] = time.monotonic):
+        if limit < 1 or window < 1:
+            raise TelegramError("rate limit and window must be positive")
         self.limit, self.window, self.clock = limit, window, clock
         self.events: dict[tuple[int, int], deque[float]] = defaultdict(deque)
 
@@ -84,17 +87,28 @@ class TelegramShell:
     _COMMAND = re.compile(r"^/(\w+)(?:@([A-Za-z0-9_]+))?(?:\s+(.*))?$", re.S)
 
     def __init__(self, store: Store, generator: Generator, api: BotAPI,
-                 *, aleph_username: str, allowed_chat_ids: set[int],
+                 *, aleph_username: str, aleph_bot_id: int,
+                 allowed_chat_ids: set[int],
                  operator_user_ids: set[int], clock: Callable[[], str] = utc_now,
                  limiter: RateLimiter | None = None, poll_timeout: int = 30):
         if not re.fullmatch(r"[A-Za-z0-9_]{5,32}", aleph_username):
             raise TelegramError("aleph_username is invalid")
+        if (isinstance(aleph_bot_id, bool) or not isinstance(aleph_bot_id, int)
+                or aleph_bot_id <= 0):
+            raise TelegramError("aleph_bot_id must be a positive integer")
         if not allowed_chat_ids or not operator_user_ids:
             raise TelegramError("chat and operator allowlists must be non-empty")
+        if any(isinstance(value, bool) or not isinstance(value, int)
+               or value >= 0 for value in allowed_chat_ids):
+            raise TelegramError("allowed chats must be group chat IDs")
+        if any(isinstance(value, bool) or not isinstance(value, int)
+               or value <= 0 for value in operator_user_ids):
+            raise TelegramError("operators must be positive user IDs")
         if not 0 <= poll_timeout <= 50:
             raise TelegramError("poll_timeout must be between 0 and 50 seconds")
         self.store, self.generator, self.api = store, generator, api
         self.aleph_username = aleph_username
+        self.aleph_bot_id = aleph_bot_id
         self.allowed_chat_ids = set(allowed_chat_ids)
         self.operator_user_ids = set(operator_user_ids)
         self.clock = clock
@@ -113,6 +127,8 @@ class TelegramShell:
         username = str(me.get("username") or "")
         if not username or not isinstance(me.get("id"), int):
             raise TelegramError("getMe returned an invalid bot identity")
+        if me["id"] == self.aleph_bot_id:
+            raise TelegramError("Null and Aleph cannot have the same bot ID")
         self.identity = Identity(me["id"], username)
         return self.identity
 
@@ -129,15 +145,33 @@ class TelegramShell:
             update_id = update.get("update_id")
             if not isinstance(update_id, int) or update_id < offset:
                 continue
+            message = update.get("message") or {}
             try:
-                self._handle(update_id, update.get("message") or {})
-            except (TelegramError, StoreError, ValueError):
+                self._handle(update_id, message)
+            except TelegramError as error:
+                self._report_command_error(message, str(error))
                 # Fail closed and confirm the update. A prepared outbound stays
                 # `sending`/`uncertain`, so a restart never duplicates it.
-                pass
+            except (StoreError, ValueError):
+                self._report_command_error(
+                    message, "Null could not safely complete that command.")
             self.store.save_checkpoint("telegram", update_id + 1)
             handled += 1
         return handled
+
+    def _report_command_error(self, message: dict, text: str) -> None:
+        chat = message.get("chat") or {}
+        sender = message.get("from") or {}
+        message_id = message.get("message_id")
+        if (chat.get("id") not in self.allowed_chat_ids
+                or sender.get("id") not in self.operator_user_ids
+                or sender.get("is_bot") is True
+                or not isinstance(message_id, int)):
+            return
+        try:
+            self._reply(chat["id"], message_id, text)
+        except Exception:
+            pass
 
     def _handle(self, update_id: int, message: dict) -> None:
         chat = message.get("chat") or {}
@@ -158,6 +192,8 @@ class TelegramShell:
         if not match:
             return
         command, addressed, argument = match.groups()
+        if chat.get("type") in ("group", "supergroup") and not addressed:
+            return
         if addressed and addressed.casefold() != self.identity.username.casefold():
             return
         command = command.casefold()
@@ -186,10 +222,13 @@ class TelegramShell:
             self._generate(update_id, chat_id, message_id, count)
         elif command == "feedback":
             self._feedback(chat_id, user_id, message_id, message, argument)
+        elif command == "finalize":
+            self._finalize(chat_id, message_id, message)
 
     def _observe_aleph(self, chat_id: int, sender: dict, message: dict) -> None:
-        if str(sender.get("username") or "").casefold() != \
-                self.aleph_username.casefold():
+        if (sender.get("id") != self.aleph_bot_id
+                or str(sender.get("username") or "").casefold()
+                != self.aleph_username.casefold()):
             return
         reply_id = (message.get("reply_to_message") or {}).get("message_id")
         text, message_id = message.get("text"), message.get("message_id")
@@ -218,12 +257,7 @@ class TelegramShell:
         except ValueError as error:
             raise TelegramError("invalid feedback decision or outcome") from error
         note = parts[2].strip() if len(parts) == 3 else "Reviewed in Telegram."
-        reply_id = (message.get("reply_to_message") or {}).get("message_id")
-        if not isinstance(reply_id, int):
-            raise TelegramError("feedback must reply to a probe or Aleph response")
-        delivery = self.store.delivery_for_message(chat_id, reply_id)
-        outcome = self.store.outcome_for_reply(reply_id)
-        probe_id = (delivery or outcome or {}).get("probe_id")
+        probe_id = self._probe_from_reply(chat_id, message)
         if not probe_id:
             raise TelegramError("feedback reply is not correlated to a probe")
         created = self.clock()
@@ -238,6 +272,27 @@ class TelegramShell:
             self.store.append(record)
         self._reply(chat_id, message_id,
                     f"Recorded {decision.value}; expected={expected.value}.")
+
+    def _finalize(self, chat_id: int, message_id: int, message: dict) -> None:
+        probe_id = self._probe_from_reply(chat_id, message)
+        if not probe_id:
+            raise TelegramError("finalize reply is not correlated to a probe")
+        try:
+            report = Anonymizer(self.store).finalize(probe_id, self.clock())
+        except AnonymizationError as error:
+            raise TelegramError(str(error)) from error
+        self._reply(
+            chat_id, message_id,
+            f"Finalized review; candidates={report.candidates}; "
+            f"raw_deleted={report.deleted_raw}.")
+
+    def _probe_from_reply(self, chat_id: int, message: dict) -> str | None:
+        reply_id = (message.get("reply_to_message") or {}).get("message_id")
+        if not isinstance(reply_id, int):
+            return None
+        delivery = self.store.delivery_for_message(chat_id, reply_id)
+        outcome = self.store.outcome_for_reply(reply_id)
+        return (delivery or outcome or {}).get("probe_id")
 
     def _mode(self) -> ScenarioFamily | None:
         value = self.store.control("mode", "mixed")
@@ -260,8 +315,12 @@ class TelegramShell:
             for item in self.store.list("probe"))
         self._reply(
             chat_id, message_id,
-            f"Null is {'paused' if paused else 'running'}; mode={self.store.control('mode', 'mixed')}; "
-            f"unreviewed={unresolved}; checkpoint={self.store.checkpoint('telegram')}.")
+            f"Null is {'paused' if paused else 'running'}; "
+            f"run={self.store.control('run_id', 'not-started')}; "
+            f"mode={self.store.control('mode', 'mixed')}; "
+            f"rate={self.limiter.limit}/{self.limiter.window}s; "
+            f"max_burst={MAX_BURST}; unreviewed={unresolved}; "
+            f"checkpoint={self.store.checkpoint('telegram')}.")
 
     def _generate(self, update_id: int, chat_id: int,
                   command_message_id: int, count: int) -> None:

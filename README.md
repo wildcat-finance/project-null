@@ -45,6 +45,8 @@ The first interface should stay deliberately small:
 - `/burst <n>` — schedule a bounded mixed batch;
 - `/mode <name>` — select a scenario family;
 - `/feedback <result> [note]` — attach a human judgement to the replied-to probe;
+- `/finalize` — anonymise a reviewed probe, purge its raw linkage, and place it
+  in the appropriate proposal queue;
 - `/pause` and `/resume` — stop or restart generation without losing state;
 - `/status` — show the current run, mix, rate limit, and unresolved reviews.
 
@@ -112,7 +114,9 @@ Correlate a probe with Aleph's response or silence without coupling Null to Alep
 
 ### 5. Add human review
 
-Make feedback fast enough to happen in the group. Support expected-outcome corrections, notes, duplicate marking, and promotion into a proposed regression or corpus-gap queue. No automatic corpus writes.
+Make feedback fast enough to happen in the group. Support expected-outcome
+corrections, notes, duplicate marking, and explicit finalisation into a proposed
+regression or corpus-gap queue. No automatic corpus writes.
 
 ### 6. Enforce anonymisation
 
@@ -138,7 +142,12 @@ Null is not:
 
 ## First milestone
 
-The first useful release sends a reproducible mixed batch to a private Telegram group, survives a restart without duplication, captures reply-based human judgements, and exports an anonymised review artifact. It does not need an elaborate generative model. The feedback loop is the product; creative question generation is one component.
+The first useful release sends a reproducible mixed batch to a private Telegram
+group, survives a restart without duplication, captures and explicitly finalises
+reply-based human judgements, and exports an anonymised review artifact without
+waiting for the 30-day raw-data deadline. It does not need an elaborate
+generative model. The feedback loop is the product; creative question generation
+is one component.
 
 ## Implementation status
 

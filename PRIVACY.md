@@ -21,6 +21,11 @@ Long-term records preserve whether the source was synthetic,
 production-derived, or human-authored. They retain only the source calendar
 date, not the exact message/probe timestamp.
 
+An allowlisted reviewer may invoke `/finalize@<NullBot>` before the deadline.
+That creates the same permitted long-term records and immediately removes every
+raw record and delivery control that can link the candidate back to Telegram.
+Finalisation is irreversible and is never inferred from ordinary feedback.
+
 The test suite searches the compacted database bytes for unique fixture chat
 IDs and usernames after expiry. This demonstrates that Null's retained stores
 cannot join an anonymised candidate back to a Telegram identity.

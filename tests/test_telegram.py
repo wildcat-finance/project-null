@@ -47,6 +47,7 @@ def shell(tmp_path, api):
     instance = TelegramShell(
         store, Generator(clock=lambda: NOW), api,
         aleph_username="ProjectAlephWildcat_bot",
+        aleph_bot_id=8728174629,
         allowed_chat_ids={-100}, operator_user_ids={7}, clock=lambda: NOW)
     instance.startup()
     return instance, store
@@ -65,7 +66,7 @@ def test_probe_is_addressed_to_aleph_and_checkpointed(tmp_path):
 
 
 def test_restart_does_not_resend_a_prepared_probe(tmp_path):
-    duplicate = update(4, "/probe")
+    duplicate = update(4, "/probe@ProjectNull_bot")
     api = FakeAPI([duplicate, duplicate])
     instance, store = shell(tmp_path, api)
     instance.poll_once()
@@ -76,10 +77,13 @@ def test_restart_does_not_resend_a_prepared_probe(tmp_path):
 
 def test_pause_mode_burst_and_loop_prevention(tmp_path):
     api = FakeAPI([
-        update(1, "/mode false_premise"), update(2, "/pause"),
-        update(3, "/burst 2"), update(4, "/resume"),
-        update(5, "/burst 2"), update(6, "/probe", user=99),
-        update(7, "/probe", user=8728174629, bot=True),
+        update(1, "/mode@ProjectNull_bot false_premise"),
+        update(2, "/pause@ProjectNull_bot"),
+        update(3, "/burst@ProjectNull_bot 2"),
+        update(4, "/resume@ProjectNull_bot"),
+        update(5, "/burst@ProjectNull_bot 2"),
+        update(6, "/probe@ProjectNull_bot", user=99),
+        update(7, "/probe@ProjectNull_bot", user=8728174629, bot=True),
     ])
     instance, store = shell(tmp_path, api)
     instance.poll_once()
@@ -92,7 +96,7 @@ def test_pause_mode_burst_and_loop_prevention(tmp_path):
 def test_commands_for_other_bots_and_ambient_text_are_ignored(tmp_path):
     api = FakeAPI([
         update(1, "/probe@SomeoneElse_bot"),
-        update(2, "please make a probe"),
+        update(2, "please make a probe"), update(3, "/probe"),
     ])
     instance, store = shell(tmp_path, api)
     instance.poll_once()
@@ -100,7 +104,7 @@ def test_commands_for_other_bots_and_ambient_text_are_ignored(tmp_path):
 
 
 def test_aleph_reply_and_human_feedback_are_correlated(tmp_path):
-    api = FakeAPI([update(1, "/probe")])
+    api = FakeAPI([update(1, "/probe@ProjectNull_bot")])
     instance, store = shell(tmp_path, api)
     instance.poll_once()
     delivery = store.list("delivery")[0]
@@ -110,7 +114,8 @@ def test_aleph_reply_and_human_feedback_are_correlated(tmp_path):
     instance.poll_once()
     outcome = store.list("aleph_outcome")[0]
     assert outcome["outcome"] == "abstained"
-    feedback = update(3, "/feedback corpus_gap answered missing documentation")
+    feedback = update(
+        3, "/feedback@ProjectNull_bot corpus_gap answered missing documentation")
     feedback["message"]["reply_to_message"] = {"message_id": 12}
     api.updates = [feedback]
     instance.poll_once()
@@ -118,3 +123,51 @@ def test_aleph_reply_and_human_feedback_are_correlated(tmp_path):
     assert saved["probe_id"] == delivery["probe_id"]
     assert saved["decision"] == "corpus_gap"
     assert saved["expected_outcome"] == "answered"
+    finalize = update(4, "/finalize@ProjectNull_bot")
+    finalize["message"]["reply_to_message"] = {"message_id": 12}
+    api.updates = [finalize]
+    instance.poll_once()
+    assert store.list("probe") == store.list("delivery") == []
+    assert store.list("aleph_outcome") == store.list("feedback") == []
+    assert len(store.list("anonymized_question")) == 1
+    assert store.list("export_candidate")[0]["kind"] == "corpus_proposal"
+
+
+def test_aleph_identity_requires_numeric_id_and_username(tmp_path):
+    api = FakeAPI([update(1, "/probe@ProjectNull_bot")])
+    instance, store = shell(tmp_path, api)
+    instance.poll_once()
+    delivery = store.list("delivery")[0]
+    forged = bot_reply(2, "Explanation\nforged\n\nSources\nhttps://example.com",
+                       delivery["message_id"])
+    forged["message"]["from"]["id"] = 123456
+    api.updates = [forged]
+    instance.poll_once()
+    assert store.list("aleph_outcome") == []
+
+
+def test_status_reports_run_and_load_boundary(tmp_path):
+    api = FakeAPI([update(1, "/status@ProjectNull_bot")])
+    instance, store = shell(tmp_path, api)
+    store.set_control("run_id", "run_0123456789abcdefabcd")
+    instance.poll_once()
+    status = [payload["text"] for method, payload in api.calls
+              if method == "sendMessage"][-1]
+    assert "run=run_0123456789abcdefabcd" in status
+    assert "rate=6/60s" in status and "max_burst=10" in status
+
+
+def test_finalize_requires_review_and_reports_operator_error(tmp_path):
+    api = FakeAPI([update(1, "/probe@ProjectNull_bot")])
+    instance, store = shell(tmp_path, api)
+    instance.poll_once()
+    delivery = store.list("delivery")[0]
+    finalize = update(2, "/finalize@ProjectNull_bot")
+    finalize["message"]["reply_to_message"] = {
+        "message_id": delivery["message_id"]}
+    api.updates = [finalize]
+    instance.poll_once()
+    assert len(store.list("probe")) == 1
+    error = [payload["text"] for method, payload in api.calls
+             if method == "sendMessage"][-1]
+    assert error == "probe has no reviewer feedback"

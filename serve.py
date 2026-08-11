@@ -27,11 +27,13 @@ def main() -> int:
         api = TelegramHTTP()
         shell = TelegramShell(
             store, Generator(), api, aleph_username=config.aleph_username,
+            aleph_bot_id=config.aleph_bot_id,
             allowed_chat_ids=set(config.allowed_chat_ids),
             operator_user_ids=set(config.operator_user_ids),
             poll_timeout=config.poll_timeout)
         identity = shell.startup()
         run = publish_run(config)
+        store.set_control("run_id", run["run_id"])
         print(f"Project Null @{identity.username} run={run['run_id']} paused="
               f"{store.control('paused')}", flush=True)
         stop = threading.Event()

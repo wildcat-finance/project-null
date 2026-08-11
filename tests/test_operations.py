@@ -23,6 +23,7 @@ def environment(tmp_path):
         "NULL_ALLOWED_CHAT_IDS": "-100987654321",
         "NULL_OPERATOR_USER_IDS": "987654321",
         "NULL_ALEPH_USERNAME": "ProjectAlephWildcat_bot",
+        "NULL_ALEPH_BOT_ID": "8728174629",
         "NULL_SOURCE_REVISION": "abc1234",
         "NULL_TELEGRAM_TOKEN": "must-never-appear",
     }
@@ -35,13 +36,23 @@ def test_public_configuration_and_run_hide_identity_and_token(tmp_path):
     assert "must-never-appear" not in serialized
     assert "987654321" not in serialized
     assert record["configuration"]["allowed_chat_count"] == 1
+    assert record["configuration"]["aleph_bot_id"] == 8728174629
     assert publish_run(config, "2026-08-11T00:00:00Z") == record
 
 
 def test_config_requires_explicit_allowlists(tmp_path):
     with pytest.raises(OperationsError, match="non-empty"):
         Config.from_env({"NULL_ALLOWED_CHAT_IDS": "",
-                         "NULL_OPERATOR_USER_IDS": "7"})
+                         "NULL_OPERATOR_USER_IDS": "7",
+                         "NULL_ALEPH_BOT_ID": "8728174629"})
+    with pytest.raises(OperationsError, match="group chat IDs"):
+        Config.from_env({"NULL_ALLOWED_CHAT_IDS": "100",
+                         "NULL_OPERATOR_USER_IDS": "7",
+                         "NULL_ALEPH_BOT_ID": "8728174629"})
+    with pytest.raises(OperationsError, match="positive user IDs"):
+        Config.from_env({"NULL_ALLOWED_CHAT_IDS": "-100",
+                         "NULL_OPERATOR_USER_IDS": "-7",
+                         "NULL_ALEPH_BOT_ID": "8728174629"})
 
 
 def test_health_and_audit_are_scrubbed(tmp_path):
