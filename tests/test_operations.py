@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from project_null.generator import MIXED_POLICY_VERSION
 from project_null.operations import (
     Config, OperationsError, health_report, publish_run,
     record_peer_reply_evidence, write_audit,
@@ -38,6 +39,8 @@ def test_public_configuration_and_run_hide_identity_and_token(tmp_path):
     assert "987654321" not in serialized
     assert record["configuration"]["allowed_chat_count"] == 1
     assert record["configuration"]["aleph_bot_id"] == 8728174629
+    assert (record["configuration"]["mixed_policy_version"]
+            == MIXED_POLICY_VERSION)
     assert publish_run(config, "2026-08-11T00:00:00Z") == record
 
 

@@ -83,6 +83,12 @@ Safety probes should exercise categories without repeatedly emitting slurs, thre
 
 The mix, seeds, model, prompt version, and sampling settings must be recorded so a run can be reproduced.
 
+Mixed mode uses a versioned, seeded stratified cycle. Each family appears once
+before any family repeats, so a bounded burst of up to ten probes spends every
+slot on a different question family. Explicit single-family mode remains
+available for targeted regression rehearsals. The policy version and catalogue
+hash are recorded with the run and each generated probe.
+
 ## Data and privacy
 
 Raw inbound questions and associated Telegram identifiers may be retained for at most **30 days** for debugging and review.

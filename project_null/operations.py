@@ -10,7 +10,9 @@ import tempfile
 from dataclasses import dataclass
 from typing import Mapping
 
-from .generator import CATALOG_VERSION, MAX_BURST, catalog_hash
+from .generator import (
+    CATALOG_VERSION, MAX_BURST, MIXED_POLICY_VERSION, catalog_hash,
+)
 from .schema import RAW_RETENTION, SCHEMA_VERSION, parse_utc, utc_now
 from .store import Store
 
@@ -88,6 +90,7 @@ class Config:
             "source_revision": self.source_revision,
             "catalog_version": CATALOG_VERSION,
             "catalog_sha256": catalog_hash(),
+            "mixed_policy_version": MIXED_POLICY_VERSION,
             "maximum_burst": MAX_BURST,
             "raw_retention_seconds": int(RAW_RETENTION.total_seconds()),
         }
