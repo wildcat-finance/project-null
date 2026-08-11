@@ -27,6 +27,10 @@ class TelegramError(RuntimeError):
     """Telegram or command state cannot be handled safely."""
 
 
+class TelegramTimeout(TelegramError):
+    """Telegram transport timed out before returning a Bot API response."""
+
+
 class BotAPI(Protocol):
     def call(self, method: str, payload: dict | None = None): ...
 
@@ -51,7 +55,13 @@ class TelegramHTTP:
                 body = json.load(response)
         except urllib.error.HTTPError as error:
             raise TelegramError(f"Telegram {method} returned HTTP {error.code}")
-        except (urllib.error.URLError, json.JSONDecodeError) as error:
+        except TimeoutError as error:
+            raise TelegramTimeout(f"Telegram {method} timed out") from error
+        except urllib.error.URLError as error:
+            if isinstance(error.reason, TimeoutError):
+                raise TelegramTimeout(f"Telegram {method} timed out") from error
+            raise TelegramError(f"Telegram {method} failed: {error}")
+        except json.JSONDecodeError as error:
             raise TelegramError(f"Telegram {method} failed: {error}")
         if body.get("ok") is not True:
             raise TelegramError(f"Telegram {method} refused the request")
@@ -136,10 +146,15 @@ class TelegramShell:
         if self.identity is None:
             raise TelegramError("startup must pass before polling")
         offset = self.store.checkpoint("telegram")
-        updates = self.api.call("getUpdates", {
-            "offset": offset, "timeout": self.poll_timeout, "limit": 100,
-            "allowed_updates": ["message"],
-        })
+        try:
+            updates = self.api.call("getUpdates", {
+                "offset": offset, "timeout": self.poll_timeout, "limit": 100,
+                "allowed_updates": ["message"],
+            })
+        except TelegramTimeout:
+            # A long-poll read timeout is an empty iteration. No update was
+            # observed, so the durable checkpoint must remain unchanged.
+            return 0
         handled = 0
         for update in updates:
             update_id = update.get("update_id")

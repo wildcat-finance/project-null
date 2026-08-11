@@ -1,8 +1,12 @@
 import json
 
+import pytest
+
 from project_null.generator import Generator
 from project_null.store import Store
-from project_null.telegram import TelegramShell
+from project_null.telegram import (
+    TelegramHTTP, TelegramShell, TelegramTimeout,
+)
 
 NOW = "2026-08-11T00:00:00Z"
 
@@ -12,6 +16,8 @@ class FakeAPI:
         self.updates = list(updates)
         self.calls = []
         self.next_message = 100
+        self.poll_timeout = False
+        self.send_timeout = False
 
     def call(self, method, payload=None):
         self.calls.append((method, payload or {}))
@@ -21,9 +27,13 @@ class FakeAPI:
         if method == "getWebhookInfo":
             return {"url": ""}
         if method == "getUpdates":
+            if self.poll_timeout:
+                raise TelegramTimeout("fixture poll timed out")
             offset = payload["offset"]
             return [item for item in self.updates if item["update_id"] >= offset]
         if method == "sendMessage":
+            if self.send_timeout:
+                raise TelegramTimeout("fixture send timed out")
             self.next_message += 1
             return {"message_id": self.next_message}
         raise AssertionError(method)
@@ -75,6 +85,37 @@ def test_restart_does_not_resend_a_prepared_probe(tmp_path):
     probe_sends = [payload for method, payload in api.calls
                    if method == "sendMessage" and payload["text"].startswith("/ask@")]
     assert len(probe_sends) == 1
+
+
+def test_long_poll_timeout_is_an_empty_uncheckpointed_iteration(tmp_path):
+    api = FakeAPI()
+    instance, store = shell(tmp_path, api)
+    api.poll_timeout = True
+
+    assert instance.poll_once() == 0
+    assert store.checkpoint("telegram") == 0
+    assert store.list("probe") == []
+
+
+def test_send_timeout_keeps_probe_uncertain_and_confirms_command(tmp_path):
+    api = FakeAPI([update(1, "/probe@ProjectNull_bot")])
+    instance, store = shell(tmp_path, api)
+    api.send_timeout = True
+
+    assert instance.poll_once() == 1
+    probe = store.list("probe")[0]
+    assert store.control(f"delivery:{probe['probe_id']}") == "uncertain"
+    assert store.list("delivery") == []
+    assert store.checkpoint("telegram") == 2
+
+
+def test_http_read_timeout_is_typed_without_transport_detail(monkeypatch):
+    def timed_out(*_args, **_kwargs):
+        raise TimeoutError("The read operation timed out")
+
+    monkeypatch.setattr("urllib.request.urlopen", timed_out)
+    with pytest.raises(TelegramTimeout, match="Telegram getUpdates timed out"):
+        TelegramHTTP("fixture-token").call("getUpdates")
 
 
 def test_pause_mode_burst_and_loop_prevention(tmp_path):

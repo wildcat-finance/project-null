@@ -95,6 +95,11 @@ through the Bot API. It separately reports count-only evidence of captured Aleph
 replies and their latest observation time; this proves historical delivery but
 does not claim that the current BotFather switch can be queried.
 
+Telegram long-poll read timeouts are normal empty iterations and do not restart
+the service or advance its checkpoint. Repeated process restarts therefore
+indicate a different failure and require inspection; send-timeout probes remain
+`uncertain` for manual reconciliation rather than automatic replay.
+
 The daily maintenance timer independently enforces retention and publishes the
 current immutable export. Service, monitor, and maintenance units run without
 capabilities, with read-only system paths, closed devices, restricted

@@ -49,6 +49,11 @@ it will not automatically send the same probe again. An operator may need to
 reconcile a `sending` or `uncertain` probe, but restarts cannot cause a bot loop
 or duplicate flood.
 
+A Bot API read timeout during `getUpdates` is treated as an empty poll: no
+update is observed and the durable checkpoint does not advance. The same
+timeout during `sendMessage` is not treated as success; the prepared probe stays
+`uncertain` and is never automatically retried.
+
 The adapter also enforces:
 
 - a monotonic update checkpoint;
