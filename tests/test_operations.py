@@ -5,6 +5,9 @@ import pytest
 from project_null.operations import (
     Config, OperationsError, health_report, publish_run, write_audit,
 )
+from project_null.schema import (
+    AlephOutcome, OutcomeKind, raw_expiry, stable_id,
+)
 from project_null.store import Store
 
 
@@ -61,11 +64,35 @@ def test_health_and_audit_are_scrubbed(tmp_path):
     store.set_control("paused", "true")
     report = health_report(store, API(), config)
     assert report["ok"] is True
-    assert report["telegram"]["bot_to_bot_mode"] == "operator_attestation_required"
+    assert report["telegram"]["bot_to_bot_mode"] == "not_exposed_by_bot_api"
+    assert report["telegram"]["peer_reply_evidence"] == {
+        "captured": False, "count": 0, "last_observed_at": None}
     path = write_audit(store, config, "run_123", "2026-08-11T00:00:00Z")
     data = path.read_text()
     assert "987654321" not in data and "must-never-appear" not in data
     assert path.stat().st_mode & 0o777 == 0o600
+
+
+def test_health_reports_scrubbed_peer_reply_evidence(tmp_path):
+    config = Config.from_env(environment(tmp_path))
+    store = Store(config.db_path)
+    observed_at = "2026-08-11T00:39:43Z"
+    store.append(AlephOutcome(
+        outcome_id=stable_id("outcome", {"reply": 987654321}),
+        probe_id=stable_id("probe", {"reply": 987654321}),
+        outcome=OutcomeKind.ANSWERED,
+        observed_at=observed_at,
+        raw_expires_at=raw_expiry(observed_at),
+        reply_message_id=987654321,
+        latency_ms=56648,
+        route="corpus",
+    ))
+
+    report = health_report(store, API(), config)
+
+    assert report["telegram"]["peer_reply_evidence"] == {
+        "captured": True, "count": 1, "last_observed_at": observed_at}
+    assert "987654321" not in json.dumps(report)
 
 
 def test_production_units_keep_state_bounded():

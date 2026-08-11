@@ -10,11 +10,14 @@ synthetic probe as an explicit command:
 Telegram normally hides bot messages from other bots. Current Telegram supports
 [Bot-to-Bot Communication Mode](https://core.telegram.org/api/bots%2Fbot-to-bot):
 in a group, an explicitly addressed command is delivered when at least one of
-the two bots has that mode enabled. Enable the mode for Null in BotFather before
-the live rehearsal. Aleph does not need administrator access and neither bot
-needs Group Privacy disabled.
+the two bots has that mode enabled. The reference deployment has the mode enabled
+for Null. For a new bot, open BotFather, send `/mybots`, select the bot, then use
+the blue **Open** button to launch BotFather's management Mini App and enable
+**Bot-to-Bot Communication Mode** there. The switch is not present in the
+classic **Bot Settings** button list. Aleph does not need administrator access
+and neither bot needs Group Privacy disabled.
 
-Aleph separately keeps bot-authored input default-closed. Before rehearsal, add
+Aleph separately keeps bot-authored input default-closed. Before a new rehearsal, add
 Null's numeric bot ID to Aleph's `ALEPH_PEER_BOT_IDS` setting and require Aleph's
 dependency monitor to report one approved peer. The allowlist does not broaden
 Null's capability: Aleph accepts only the explicit command form above.
@@ -59,7 +62,7 @@ This follows Telegram's own [loop-prevention requirements](https://core.telegram
 
 ## Runtime inputs
 
-The live process will require:
+Each live process requires:
 
 - `NULL_TELEGRAM_TOKEN` — Null's separate Bot API token;
 - the allowlisted developer-group chat ID;

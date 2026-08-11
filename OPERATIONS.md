@@ -1,10 +1,17 @@
 # Operations and rollout
 
-Null is deployable but must remain paused until its private-group rehearsal.
+The reference deployment is installed and persistent. It completed its
+private-group single-probe rehearsal on 11 August 2026 and remains paused between
+controlled batches.
 
-## Human-supplied launch inputs
+Its proven path is Null probe → authenticated Aleph reply → operator feedback →
+explicit finalisation → immediate raw-link purge → immutable regression export.
+The first published export is `2805b88f4d91f2890e03`. A controlled paused
+restart preserved every record count and produced no duplicate delivery.
 
-The live launch requires exactly these external values:
+## Per-deployment external inputs
+
+Each new deployment requires exactly these external values:
 
 1. a separate Telegram Bot API token in `NULL_TELEGRAM_TOKEN`;
 2. the private developer-group chat ID;
@@ -28,7 +35,7 @@ sidecars even when an operator initializes it outside the systemd `UMask`.
 The service starts paused on a fresh database. Only an allowlisted, explicitly
 addressed `/resume@<NullBot>` command can enable probe generation.
 
-## Rehearsal order
+## Rehearsal order for a new deployment
 
 1. Install source and dependencies without the token.
 2. Create the service user and writable state directory.
@@ -57,13 +64,36 @@ If the rehearsal is abandoned, remove Null's ID from `ALEPH_PEER_BOT_IDS` and
 restart Aleph. Do not leave a peer authorized merely because both bots have been
 removed from the group.
 
+## Small-group rollout order
+
+The reference deployment is at this boundary. Keep Null paused while adding the
+small developer group, then:
+
+1. confirm `/status@<NullBot>` reports paused and the intended rate limit;
+2. set `/mode@<NullBot> mixed`;
+3. send `/resume@<NullBot>`, one `/burst@<NullBot> 3`, and immediately
+   `/pause@<NullBot>`;
+4. review each correlated answer or timeout and explicitly finalise only the
+   cases worth retaining;
+5. run maintenance and inspect candidate counts and manifest hashes, never raw
+   question text in operational logs;
+6. tune the family mix or Aleph behavior while still paused; and
+7. widen the trial only after no duplicate/recursive delivery, no unauthorized
+   command acceptance, no identifier-bearing export, and no unexplained outcome
+   remain.
+
+Do not run a second batch merely to increase volume. Every unresolved result is
+reviewed or allowed to expire under the 30-day boundary first.
+
 ## Monitoring and failure alerts
 
 `monitor.py` emits scrubbed JSON and exits nonzero when the database, bot
 identity, Group Privacy, or webhook boundary fails. The five-minute systemd
 timer makes that status available to the host's alerting agent. Bot-to-Bot mode
-is not exposed by `getMe`, so the monitor reports it as requiring operator
-attestation and the rehearsal proves actual delivery.
+is not exposed by `getMe`, so the monitor labels the setting as not observable
+through the Bot API. It separately reports count-only evidence of captured Aleph
+replies and their latest observation time; this proves historical delivery but
+does not claim that the current BotFather switch can be queried.
 
 The daily maintenance timer independently enforces retention and publishes the
 current immutable export. Service, monitor, and maintenance units run without

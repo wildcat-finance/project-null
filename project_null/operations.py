@@ -143,6 +143,14 @@ def write_audit(store: Store, config: Config, run_id: str,
 def health_report(store: Store, api, config: Config) -> dict:
     me = api.call("getMe")
     webhook = api.call("getWebhookInfo")
+    captured_replies = [
+        outcome for outcome in store.list("aleph_outcome")
+        if isinstance(outcome.get("reply_message_id"), int)
+    ]
+    last_captured_at = max(
+        (outcome["observed_at"] for outcome in captured_replies),
+        default=None,
+    )
     return {
         "ok": bool(store.integrity()
                    and isinstance(me.get("id"), int)
@@ -156,6 +164,11 @@ def health_report(store: Store, api, config: Config) -> dict:
                                       me.get("can_read_all_group_messages") is not True
                                       else "disabled"),
                      "webhook": "absent" if not webhook.get("url") else "present",
-                     "bot_to_bot_mode": "operator_attestation_required"},
+                     "bot_to_bot_mode": "not_exposed_by_bot_api",
+                     "peer_reply_evidence": {
+                         "captured": bool(captured_replies),
+                         "count": len(captured_replies),
+                         "last_observed_at": last_captured_at,
+                     }},
         "configuration": config.public(),
     }

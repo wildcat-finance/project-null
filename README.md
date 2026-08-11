@@ -39,16 +39,20 @@ Reviewer feedback decides what happens next. A failure may become a regression q
 
 Null lives in a dedicated Telegram group alongside Aleph and its human reviewers.
 
-The first interface should stay deliberately small:
+The interface stays deliberately small. In groups, every command uses the
+explicit `@<NullBot>` form:
 
-- `/probe` — generate and send one question;
-- `/burst <n>` — schedule a bounded mixed batch;
-- `/mode <name>` — select a scenario family;
-- `/feedback <result> [note]` — attach a human judgement to the replied-to probe;
-- `/finalize` — anonymise a reviewed probe, purge its raw linkage, and place it
+- `/probe@<NullBot>` — generate and send one question;
+- `/burst@<NullBot> <n>` — send a bounded batch of one to ten questions;
+- `/mode@<NullBot> mixed|<family>` — select the mixed catalogue or one family;
+- `/feedback@<NullBot> <decision> <expected_outcome> [note]` — attach a human
+  judgement to the replied-to probe or Aleph answer;
+- `/finalize@<NullBot>` — anonymise a reviewed probe, purge its raw linkage, and place it
   in the appropriate proposal queue;
-- `/pause` and `/resume` — stop or restart generation without losing state;
-- `/status` — show the current run, mix, rate limit, and unresolved reviews.
+- `/pause@<NullBot>` and `/resume@<NullBot>` — disable or enable generation
+  without losing state; and
+- `/status@<NullBot>` — show the current run, mode, rate limit, checkpoint, and
+  unresolved reviews.
 
 Null must be rate-limited, visibly identifiable, and unable to respond recursively to its own output or another bot's output. Group delivery should use explicit bot commands and replies rather than relying on plain `@mentions`, which Telegram privacy mode does not reliably deliver to bots.
 
@@ -94,41 +98,50 @@ Anonymised questions and regression cases may then be retained indefinitely. Del
 `PRIVACY.md` defines the executable deletion boundary. `EXPORTS.md` defines the
 separate, content-addressed regression and corpus-proposal artifacts.
 
-## What must be built, in order
+## Build order and current rollout
 
-### 1. Define the records
+Stages 1–7 are implemented. Stage 8 is active: the single-probe production
+rehearsal and paused restart test pass, while the small developer-group mixed
+batch and wider rollout remain. This dependency order still governs future
+changes.
+
+### 1. Define the records — implemented
 
 Specify versioned schemas for scenarios, probes, Telegram deliveries, Aleph outcomes, reviewer feedback, anonymised questions, and export candidates. Define the outcome taxonomy and the exact 30-day retention clock before collecting anything.
 
-### 2. Build the Telegram shell
+### 2. Build the Telegram shell — implemented
 
 Implement polling, command handling, reply-based feedback, deduplication, rate limits, pause/resume, durable checkpoints, and loop prevention. Prove that restarts do not resend probes or lose feedback.
 
-### 3. Build deterministic generation
+### 3. Build deterministic generation — implemented
 
 Start with templates and seeded mutations for each question family. Add model-generated variants only behind a strict envelope: declared intent, bounded length, provenance, reproducible settings, and no claim that generated facts are real.
 
-### 4. Capture Aleph outcomes
+### 4. Capture Aleph outcomes — implemented
 
 Correlate a probe with Aleph's response or silence without coupling Null to Aleph's internals. Record route, citations, latency, and terminal outcome where exposed, while treating Telegram as the end-to-end truth.
 
-### 5. Add human review
+### 5. Add human review — implemented
 
 Make feedback fast enough to happen in the group. Support expected-outcome
 corrections, notes, duplicate marking, and explicit finalisation into a proposed
 regression or corpus-gap queue. No automatic corpus writes.
 
-### 6. Enforce anonymisation
+### 6. Enforce anonymisation — implemented
 
 Run and test the 30-day purge/anonymisation job. Demonstrate that retained fixtures cannot be joined back to Telegram identities through Null's own stores.
 
-### 7. Export evaluation candidates
+### 7. Export evaluation candidates — implemented
 
 Produce reviewable, versioned artifacts that Aleph can ingest deliberately: questions, expected routes/outcomes, rationale, provenance class, and any approved evidence targets. Keep corpus proposals separate from regression tests.
 
-### 8. Operate the loop
+### 8. Operate the loop — active rollout
 
-Add health checks, immutable run manifests, audit summaries, failure alerts, and safe rollout controls. Begin with a tiny developer group, tune the mix, then widen the trial.
+Health checks, immutable run manifests, audit summaries, failure alerts,
+hardened services, and safe rollout controls are implemented. The remaining
+order is: run a bounded mixed batch with the small developer group, review and
+finalise every useful case, tune the mix from those results, then widen the
+trial only after the privacy and loop-prevention boundaries continue to hold.
 
 ## Non-goals
 
@@ -142,23 +155,24 @@ Null is not:
 
 ## First milestone
 
-The first useful release sends a reproducible mixed batch to a private Telegram
-group, survives a restart without duplication, captures and explicitly finalises
-reply-based human judgements, and exports an anonymised review artifact without
-waiting for the 30-day raw-data deadline. It does not need an elaborate
-generative model. The feedback loop is the product; creative question generation
-is one component.
+The reference deployment has completed the single-probe path: Bot-to-Bot
+delivery, Aleph outcome capture, reply-based review, explicit finalisation,
+immediate raw-link purge, immutable export publication, and a paused restart
+without duplication. The remaining first-milestone acceptance step is a
+reproducible mixed batch with the small developer group. It does not need an
+elaborate generative model. The feedback loop is the product; creative question
+generation is one component.
 
 ## Implementation status
 
-The repository now implements all offline dependencies for that milestone:
-versioned records, durable checkpoints, deterministic generation, Telegram
-commands and loop prevention, observable Aleph outcome capture, human review,
-secure anonymisation, immutable exports, run manifests, scrubbed audits,
-monitoring, maintenance, and hardened service units.
+The repository implements the full first-milestone system: versioned records,
+durable checkpoints, deterministic generation, Telegram commands and loop
+prevention, observable Aleph outcome capture, human review, secure
+anonymisation, immutable exports, run manifests, scrubbed audits, monitoring,
+maintenance, and hardened service units.
 
-`OPERATIONS.md` is the paused-first launch runbook. Live rehearsal is blocked on
-Null's separate Telegram token, the private chat/reviewer allowlists, and the
-BotFather Bot-to-Bot mode switch. Once Null's numeric bot ID exists, the runbook
-also authorizes that exact ID through Aleph's default-closed peer allowlist
-before sending a single probe.
+The reference deployment has its separate token and allowlists installed,
+Bot-to-Bot Communication Mode enabled for Null, and Null's numeric ID authorized
+through Aleph's default-closed peer allowlist. It is persistent but deliberately
+paused between controlled batches. `OPERATIONS.md` records the passed rehearsal
+and the remaining rollout sequence.
