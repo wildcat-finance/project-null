@@ -46,15 +46,23 @@ or finalisation. The reviewer can then work without a reply:
 ```
 
 An operator can review up to twenty queue entries in one standalone message.
-The opening and closing braces surround newline-separated ordinary code-based
-feedback arguments. Reply inference is deliberately unavailable inside a
-batch:
+The opening and closing braces surround ordinary code-based feedback arguments
+separated by newlines or the copy-safe `|` character. Reply inference is
+deliberately unavailable inside a batch:
 
 ```text
 /feedback@<NullBot> {
 <review_code> <decision> <expected_outcome> [note]
 <review_code> <decision> <expected_outcome> [note]
 }
+```
+
+For Telegram clients that collapse copied line breaks, send the entire batch
+on one line with `|` separators. The pipe is reserved as a delimiter and cannot
+appear inside a batch note:
+
+```text
+/feedback@<NullBot> {<code> regression answered note | <code> discard refused note}
 ```
 
 Null processes the lines sequentially and returns an ordered receipt with one
@@ -94,6 +102,12 @@ Finalisation has the matching code-only batch form:
 <review_code>
 <review_code>
 }
+```
+
+The same copy-safe form is accepted for finalisation:
+
+```text
+/finalize@<NullBot> {<review_code> | <review_code>}
 ```
 
 Each successful line crosses the irreversible promotion boundary before the
