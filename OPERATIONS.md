@@ -72,7 +72,8 @@ small developer group, then:
 1. confirm `/status@<NullBot>` reports paused and the intended rate limit;
 2. set `/mode@<NullBot> mixed`;
 3. send `/resume@<NullBot>`, one `/burst@<NullBot> 3`, and immediately
-   `/pause@<NullBot>`;
+   `/pause@<NullBot>`; the versioned mixed policy assigns three distinct
+   families rather than sampling the same family twice;
 4. run `/queue@<NullBot>`, review each correlated answer or timeout by its
    short code, and explicitly finalise only the cases worth retaining;
 5. run maintenance and inspect candidate counts and manifest hashes, never raw
@@ -104,6 +105,12 @@ The daily maintenance timer independently enforces retention and publishes the
 current immutable export. Service, monitor, and maintenance units run without
 capabilities, with read-only system paths, closed devices, restricted
 namespaces, and owner-only file creation.
+
+Scrubbed audit snapshots are transition records rather than heartbeats. The
+service writes one for each process run, then another only when its paused
+state, mode, or record counts change. The five-minute monitor remains the
+heartbeat. Existing snapshots are immutable; unchanged long-poll iterations do
+not create redundant files.
 
 ## Backups
 

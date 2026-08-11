@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from project_null.generator import Generator, MIXED_POLICY_VERSION
 from project_null.operations import (
     Config, OperationsError, health_report, publish_run,
     record_peer_reply_evidence, write_audit,
@@ -38,6 +39,8 @@ def test_public_configuration_and_run_hide_identity_and_token(tmp_path):
     assert "987654321" not in serialized
     assert record["configuration"]["allowed_chat_count"] == 1
     assert record["configuration"]["aleph_bot_id"] == 8728174629
+    assert (record["configuration"]["mixed_policy_version"]
+            == MIXED_POLICY_VERSION)
     assert publish_run(config, "2026-08-11T00:00:00Z") == record
 
 
@@ -69,6 +72,42 @@ def test_health_and_audit_are_scrubbed(tmp_path):
     data = path.read_text()
     assert "987654321" not in data and "must-never-appear" not in data
     assert path.stat().st_mode & 0o777 == 0o600
+
+
+def test_audit_writes_only_run_and_state_transitions(tmp_path):
+    config = Config.from_env(environment(tmp_path))
+    store = Store(config.db_path)
+    store.set_control("paused", "true")
+
+    first = write_audit(
+        store, config, "run_123", "2026-08-11T00:00:00Z")
+    unchanged = write_audit(
+        store, config, "run_123", "2026-08-11T00:01:00Z")
+    store.set_control("mode", "ordinary")
+    changed = write_audit(
+        store, config, "run_123", "2026-08-11T00:02:00Z")
+    store.set_control("paused", "false")
+    resumed = write_audit(
+        store, config, "run_123", "2026-08-11T00:03:00Z")
+    generated = Generator(
+        clock=lambda: "2026-08-11T00:03:30Z").generate(seed=1)
+    store.append(generated.scenario)
+    counted = write_audit(
+        store, config, "run_123", "2026-08-11T00:04:00Z")
+    new_run = write_audit(
+        store, config, "run_456", "2026-08-11T00:05:00Z")
+
+    assert first is not None
+    assert unchanged is None
+    assert changed is not None and changed != first
+    assert resumed is not None and resumed != changed
+    assert counted is not None and counted != resumed
+    assert new_run is not None and new_run != counted
+    assert len(list((tmp_path / "artifacts" / "audit").rglob("*.json"))) == 5
+    for path in (first, changed, resumed, counted, new_run):
+        record = json.loads(path.read_text())
+        assert record["state_sha256"]
+        assert "987654321" not in path.read_text()
 
 
 def test_health_reports_durable_scrubbed_peer_reply_evidence(tmp_path):
