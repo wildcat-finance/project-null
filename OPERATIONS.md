@@ -33,15 +33,23 @@ addressed `/resume@<NullBot>` command can enable probe generation.
 4. Run the full test suite.
 5. Run `monitor.py`; verify database integrity, token identity, Group Privacy,
    and absent webhook.
-6. Add Null and Aleph to the private group and enable Bot-to-Bot Communication
+6. Read Null's numeric bot ID from `getMe`. On the Aleph host, set
+   `ALEPH_PEER_BOT_IDS=<NullBotId>` in `/etc/aleph/telegram.env`, restart Aleph,
+   and require its monitor to report `peer_bot_count: 1`. Aleph's peer path is
+   default-closed and accepts only an explicitly targeted `/ask@AlephBot`.
+7. Add Null and Aleph to the private group and enable Bot-to-Bot Communication
    Mode for Null.
-7. Start the service and confirm `/status@<NullBot>` reports paused.
-8. Send `/mode@<NullBot> ordinary`, then `/resume@<NullBot>`, then one
+8. Start the service and confirm `/status@<NullBot>` reports paused.
+9. Send `/mode@<NullBot> ordinary`, then `/resume@<NullBot>`, then one
    `/probe@<NullBot>`.
-9. Confirm Aleph directly replies, Null records one outcome, and no loop occurs.
-10. Reply with `/feedback@<NullBot> regression answered rehearsal` and inspect
+10. Confirm Aleph directly replies, Null records one outcome, and no loop occurs.
+11. Reply with `/feedback@<NullBot> regression answered rehearsal` and inspect
     the count-only audit.
-11. Re-pause before changing the question mix or widening access.
+12. Re-pause before changing the question mix or widening access.
+
+If the rehearsal is abandoned, remove Null's ID from `ALEPH_PEER_BOT_IDS` and
+restart Aleph. Do not leave a peer authorized merely because both bots have been
+removed from the group.
 
 ## Monitoring and failure alerts
 

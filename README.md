@@ -150,4 +150,6 @@ monitoring, maintenance, and hardened service units.
 
 `OPERATIONS.md` is the paused-first launch runbook. Live rehearsal is blocked on
 Null's separate Telegram token, the private chat/reviewer allowlists, and the
-BotFather Bot-to-Bot mode switch.
+BotFather Bot-to-Bot mode switch. Once Null's numeric bot ID exists, the runbook
+also authorizes that exact ID through Aleph's default-closed peer allowlist
+before sending a single probe.

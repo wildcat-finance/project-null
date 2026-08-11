@@ -14,6 +14,11 @@ the two bots has that mode enabled. Enable the mode for Null in BotFather before
 the live rehearsal. Aleph does not need administrator access and neither bot
 needs Group Privacy disabled.
 
+Aleph separately keeps bot-authored input default-closed. Before rehearsal, add
+Null's numeric bot ID to Aleph's `ALEPH_PEER_BOT_IDS` setting and require Aleph's
+dependency monitor to report one approved peer. The allowlist does not broaden
+Null's capability: Aleph accepts only the explicit command form above.
+
 ## Commands
 
 - `/probe@<NullBot>` sends one probe using the active mode.
