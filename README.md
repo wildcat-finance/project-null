@@ -197,3 +197,4 @@ and the remaining rollout sequence.
 ## License
 
 Project Null is licensed under the [Apache License 2.0](LICENSE).
+Copyright 2026 Wildcat Labs.
