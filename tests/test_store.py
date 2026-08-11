@@ -18,7 +18,13 @@ def probe():
 
 
 def test_records_are_immutable(tmp_path):
-    store = Store(str(tmp_path / "null.db"))
+    path = tmp_path / "null.db"
+    store = Store(str(path))
+    assert path.stat().st_mode & 0o777 == 0o600
+    for suffix in ("-wal", "-shm"):
+        sidecar = tmp_path / ("null.db" + suffix)
+        if sidecar.exists():
+            assert sidecar.stat().st_mode & 0o777 == 0o600
     item = probe()
     store.append(item)
     assert store.get(item.probe_id)["text"] == "What is a market?"

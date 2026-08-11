@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import sqlite3
 from contextlib import contextmanager
@@ -19,6 +20,12 @@ class Store:
     def __init__(self, path: str):
         self.path = pathlib.Path(path).resolve()
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            descriptor = os.open(self.path, os.O_CREAT | os.O_APPEND, 0o600)
+            os.close(descriptor)
+            os.chmod(self.path, 0o600)
+        except OSError as error:
+            raise StoreError(f"database permissions cannot be secured: {error}") from error
         self.connection = sqlite3.connect(self.path)
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA journal_mode=WAL")
@@ -49,6 +56,10 @@ class Store:
             );
         """)
         self.connection.commit()
+        for candidate in (self.path, pathlib.Path(str(self.path) + "-wal"),
+                          pathlib.Path(str(self.path) + "-shm")):
+            if candidate.exists():
+                os.chmod(candidate, 0o600)
 
     def close(self) -> None:
         self.connection.close()

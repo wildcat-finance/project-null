@@ -22,6 +22,9 @@ stays enabled. Neither bot needs group administrator access.
 - `/var/lib/project-null/artifacts` — run manifests, scrubbed audits, and
   immutable exports.
 
+`Store` enforces mode `0600` on the SQLite database and its WAL/shared-memory
+sidecars even when an operator initializes it outside the systemd `UMask`.
+
 The service starts paused on a fresh database. Only an allowlisted, explicitly
 addressed `/resume@<NullBot>` command can enable probe generation.
 
