@@ -1,3 +1,5 @@
+import json
+
 from project_null.generator import Generator
 from project_null.store import Store
 from project_null.telegram import TelegramShell
@@ -131,6 +133,8 @@ def test_aleph_reply_and_human_feedback_are_correlated(tmp_path):
     assert store.list("aleph_outcome") == store.list("feedback") == []
     assert len(store.list("anonymized_question")) == 1
     assert store.list("export_candidate")[0]["kind"] == "corpus_proposal"
+    evidence = json.loads(store.control("peer_reply_evidence"))
+    assert evidence == {"count": 1, "last_observed_at": NOW}
 
 
 def test_aleph_identity_requires_numeric_id_and_username(tmp_path):

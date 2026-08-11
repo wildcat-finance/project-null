@@ -11,8 +11,10 @@ from dataclasses import dataclass
 from typing import Mapping
 
 from .generator import CATALOG_VERSION, MAX_BURST, catalog_hash
-from .schema import RAW_RETENTION, SCHEMA_VERSION, utc_now
+from .schema import RAW_RETENTION, SCHEMA_VERSION, parse_utc, utc_now
 from .store import Store
+
+_PEER_REPLY_CONTROL = "peer_reply_evidence"
 
 
 class OperationsError(RuntimeError):
@@ -140,17 +142,40 @@ def write_audit(store: Store, config: Config, run_id: str,
     return path
 
 
+def peer_reply_evidence(store: Store) -> dict:
+    raw = store.control(_PEER_REPLY_CONTROL)
+    if raw is None:
+        return {"captured": False, "count": 0, "last_observed_at": None}
+    try:
+        evidence = json.loads(raw)
+        count = evidence["count"]
+        last_observed_at = evidence["last_observed_at"]
+        if (isinstance(count, bool) or not isinstance(count, int) or count < 1
+                or not isinstance(last_observed_at, str)):
+            raise ValueError
+        parse_utc(last_observed_at)
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+        raise OperationsError("peer reply evidence is malformed") from error
+    return {"captured": True, "count": count,
+            "last_observed_at": last_observed_at}
+
+
+def record_peer_reply_evidence(store: Store, observed_at: str) -> dict:
+    parse_utc(observed_at)
+    current = peer_reply_evidence(store)
+    evidence = {"count": current["count"] + 1,
+                "last_observed_at": observed_at}
+    store.set_control(
+        _PEER_REPLY_CONTROL,
+        json.dumps(evidence, sort_keys=True, separators=(",", ":")),
+    )
+    return {"captured": True, **evidence}
+
+
 def health_report(store: Store, api, config: Config) -> dict:
     me = api.call("getMe")
     webhook = api.call("getWebhookInfo")
-    captured_replies = [
-        outcome for outcome in store.list("aleph_outcome")
-        if isinstance(outcome.get("reply_message_id"), int)
-    ]
-    last_captured_at = max(
-        (outcome["observed_at"] for outcome in captured_replies),
-        default=None,
-    )
+    peer_evidence = peer_reply_evidence(store)
     return {
         "ok": bool(store.integrity()
                    and isinstance(me.get("id"), int)
@@ -165,10 +190,6 @@ def health_report(store: Store, api, config: Config) -> dict:
                                       else "disabled"),
                      "webhook": "absent" if not webhook.get("url") else "present",
                      "bot_to_bot_mode": "not_exposed_by_bot_api",
-                     "peer_reply_evidence": {
-                         "captured": bool(captured_replies),
-                         "count": len(captured_replies),
-                         "last_observed_at": last_captured_at,
-                     }},
+                     "peer_reply_evidence": peer_evidence},
         "configuration": config.public(),
     }

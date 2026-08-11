@@ -3,10 +3,8 @@ import json
 import pytest
 
 from project_null.operations import (
-    Config, OperationsError, health_report, publish_run, write_audit,
-)
-from project_null.schema import (
-    AlephOutcome, OutcomeKind, raw_expiry, stable_id,
+    Config, OperationsError, health_report, publish_run,
+    record_peer_reply_evidence, write_audit,
 )
 from project_null.store import Store
 
@@ -73,26 +71,26 @@ def test_health_and_audit_are_scrubbed(tmp_path):
     assert path.stat().st_mode & 0o777 == 0o600
 
 
-def test_health_reports_scrubbed_peer_reply_evidence(tmp_path):
+def test_health_reports_durable_scrubbed_peer_reply_evidence(tmp_path):
     config = Config.from_env(environment(tmp_path))
     store = Store(config.db_path)
     observed_at = "2026-08-11T00:39:43Z"
-    store.append(AlephOutcome(
-        outcome_id=stable_id("outcome", {"reply": 987654321}),
-        probe_id=stable_id("probe", {"reply": 987654321}),
-        outcome=OutcomeKind.ANSWERED,
-        observed_at=observed_at,
-        raw_expires_at=raw_expiry(observed_at),
-        reply_message_id=987654321,
-        latency_ms=56648,
-        route="corpus",
-    ))
+    record_peer_reply_evidence(store, observed_at)
 
     report = health_report(store, API(), config)
 
     assert report["telegram"]["peer_reply_evidence"] == {
         "captured": True, "count": 1, "last_observed_at": observed_at}
     assert "987654321" not in json.dumps(report)
+
+
+def test_health_fails_loud_on_malformed_peer_reply_evidence(tmp_path):
+    config = Config.from_env(environment(tmp_path))
+    store = Store(config.db_path)
+    store.set_control("peer_reply_evidence", "not-json")
+
+    with pytest.raises(OperationsError, match="peer reply evidence is malformed"):
+        health_report(store, API(), config)
 
 
 def test_production_units_keep_state_bounded():

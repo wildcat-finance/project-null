@@ -16,6 +16,7 @@ from typing import Callable, Protocol
 from .anonymize import AnonymizationError, Anonymizer
 from .capture import OutcomeCapture
 from .generator import Generator, MAX_BURST
+from .operations import record_peer_reply_evidence
 from .schema import (
     Delivery, Feedback, OutcomeKind, ReviewDecision, ScenarioFamily,
     raw_expiry, stable_id, utc_now,
@@ -242,9 +243,11 @@ class TelegramShell:
         if isinstance(message.get("date"), int):
             observed = datetime.fromtimestamp(
                 message["date"], timezone.utc).isoformat().replace("+00:00", "Z")
-        self.capture.observe(
+        outcome = self.capture.observe(
             probe_id=delivery["probe_id"], reply_message_id=message_id,
             text=text, observed_at=observed)
+        if outcome is not None:
+            record_peer_reply_evidence(self.store, observed)
 
     def _feedback(self, chat_id: int, user_id: int, message_id: int,
                   message: dict, argument: str) -> None:
