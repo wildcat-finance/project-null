@@ -106,6 +106,12 @@ current immutable export. Service, monitor, and maintenance units run without
 capabilities, with read-only system paths, closed devices, restricted
 namespaces, and owner-only file creation.
 
+Scrubbed audit snapshots are transition records rather than heartbeats. The
+service writes one for each process run, then another only when its paused
+state, mode, or record counts change. The five-minute monitor remains the
+heartbeat. Existing snapshots are immutable; unchanged long-poll iterations do
+not create redundant files.
+
 ## Backups
 
 Backups of `/var/lib/project-null` contain identifiable raw data until each

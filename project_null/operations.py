@@ -17,6 +17,7 @@ from .schema import RAW_RETENTION, SCHEMA_VERSION, parse_utc, utc_now
 from .store import Store
 
 _PEER_REPLY_CONTROL = "peer_reply_evidence"
+_AUDIT_STATE_CONTROL = "audit_state_sha256"
 
 
 class OperationsError(RuntimeError):
@@ -131,17 +132,27 @@ def publish_run(config: Config, started_at: str | None = None) -> dict:
 
 
 def write_audit(store: Store, config: Config, run_id: str,
-                observed_at: str | None = None) -> pathlib.Path:
+                observed_at: str | None = None) -> pathlib.Path | None:
+    """Write the first snapshot for a run and each scrubbed state transition."""
     timestamp = observed_at or utc_now()
-    record = {"schema_version": SCHEMA_VERSION, "run_id": run_id,
-              "observed_at": timestamp, "record_counts": store.counts(),
-              "paused": store.control("paused", "true") == "true",
-              "mode": store.control("mode", "mixed")}
+    state = {"schema_version": SCHEMA_VERSION, "run_id": run_id,
+             "record_counts": store.counts(),
+             "paused": store.control("paused", "true") == "true",
+             "mode": store.control("mode", "mixed")}
+    state_sha256 = hashlib.sha256(_bytes(state)).hexdigest()
+    if store.control(_AUDIT_STATE_CONTROL) == state_sha256:
+        return None
+    record = {**state, "observed_at": timestamp,
+              "state_sha256": state_sha256}
     audit_id = hashlib.sha256(_bytes(record)).hexdigest()[:20]
     path = pathlib.Path(config.artifacts_path).resolve() / "audit" / \
         timestamp[:10] / f"{audit_id}.json"
+    data = _bytes(record)
+    if path.exists() and path.read_bytes() != data:
+        raise OperationsError("immutable audit snapshot contains different bytes")
     if not path.exists():
-        _atomic(path, _bytes(record), 0o600)
+        _atomic(path, data, 0o600)
+    store.set_control(_AUDIT_STATE_CONTROL, state_sha256)
     return path
 
 
