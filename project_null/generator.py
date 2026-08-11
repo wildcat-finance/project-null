@@ -13,8 +13,11 @@ from .schema import (
     stable_id, utc_now,
 )
 
-CATALOG_VERSION = "templates-v1"
+CATALOG_VERSION = "templates-v2"
+MIXED_POLICY_VERSION = "stratified-v1"
 MAX_BURST = 10
+
+_MIXED_FAMILIES = tuple(ScenarioFamily)
 
 _TEMPLATES: dict[ScenarioFamily, tuple[OutcomeKind, tuple[str, ...]]] = {
     ScenarioFamily.ORDINARY: (OutcomeKind.ANSWERED, (
@@ -76,8 +79,16 @@ DEFAULT_VARIABLES = {
 
 
 def catalog_hash() -> str:
-    payload = {family.value: [outcome.value, list(templates)]
-               for family, (outcome, templates) in _TEMPLATES.items()}
+    payload = {
+        "templates": {
+            family.value: [outcome.value, list(templates)]
+            for family, (outcome, templates) in _TEMPLATES.items()
+        },
+        "mixed_policy": {
+            "version": MIXED_POLICY_VERSION,
+            "families": [family.value for family in _MIXED_FAMILIES],
+        },
+    }
     return hashlib.sha256(json.dumps(
         payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
@@ -98,7 +109,7 @@ class Generator:
         if not isinstance(seed, int) or seed < 0 or not isinstance(index, int) or index < 0:
             raise ValueError("seed and index must be nonnegative integers")
         rng = random.Random(f"{seed}:{index}:{CATALOG_VERSION}")
-        selected = family or rng.choice(tuple(ScenarioFamily))
+        selected = family or self._mixed_family(seed, index)
         expected, templates = _TEMPLATES[selected]
         template_index = rng.randrange(len(templates))
         values = {**DEFAULT_VARIABLES, **(variables or {})}
@@ -123,9 +134,21 @@ class Generator:
             generated_at=created, raw_expires_at=raw_expiry(created),
             generator={"kind": "template", "version": CATALOG_VERSION,
                        "catalog_sha256": catalog_hash(), "seed": seed,
-                       "index": index, "template_index": template_index},
+                       "index": index, "template_index": template_index,
+                       "selection": ("explicit_family" if family is not None
+                                     else MIXED_POLICY_VERSION)},
         )
         return Generated(scenario, probe)
+
+    @staticmethod
+    def _mixed_family(seed: int, index: int) -> ScenarioFamily:
+        """Select every family once per seeded cycle before any repeats."""
+        cycle, slot = divmod(index, len(_MIXED_FAMILIES))
+        families = list(_MIXED_FAMILIES)
+        rng = random.Random(
+            f"{seed}:mixed:{cycle}:{CATALOG_VERSION}:{MIXED_POLICY_VERSION}")
+        rng.shuffle(families)
+        return families[slot]
 
     def burst(self, *, seed: int, count: int,
               family: ScenarioFamily | None = None) -> tuple[Generated, ...]:
