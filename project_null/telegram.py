@@ -99,6 +99,7 @@ class Identity:
 class TelegramShell:
     _COMMAND = re.compile(r"^/(\w+)(?:@([A-Za-z0-9_]+))?(?:\s+(.*))?$", re.S)
     _REVIEW_CODE = re.compile(r"^[0-9a-f]{12}$")
+    _REVIEW_CODE_FRAGMENT = re.compile(r"[0-9a-f]{12}", re.IGNORECASE)
     _REVIEW_BATCH_LIMIT = 20
 
     def __init__(self, store: Store, generator: Generator, api: BotAPI,
@@ -424,8 +425,22 @@ class TelegramShell:
         body = value[1:-1]
         if "{" in body or "}" in body:
             raise TelegramError("nested review batch braces are not allowed")
-        entries = tuple(line.strip() for line in body.splitlines()
-                        if line.strip())
+        if "|" in body:
+            parts = body.split("|")
+            if any(not part.strip() for part in parts):
+                raise TelegramError(
+                    "pipe-separated review batch entries cannot be empty")
+            entries = tuple(part.strip() for part in parts)
+            if any("\n" in entry or "\r" in entry for entry in entries):
+                raise TelegramError(
+                    "pipe-separated review batch entries must each stay on one line")
+        else:
+            entries = tuple(line.strip() for line in body.splitlines()
+                            if line.strip())
+            if (len(entries) == 1
+                    and len(cls._REVIEW_CODE_FRAGMENT.findall(body)) > 1):
+                raise TelegramError(
+                    "review batch appears to have collapsed; use | between entries")
         if not entries:
             raise TelegramError("review batch must contain at least one entry")
         if len(entries) > cls._REVIEW_BATCH_LIMIT:

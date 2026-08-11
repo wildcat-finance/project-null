@@ -328,6 +328,121 @@ def test_brace_review_batches_return_ordered_one_to_one_receipts(tmp_path):
     assert len(store.list("export_candidate")) == 2
 
 
+def test_pipe_review_batches_survive_collapsed_line_breaks(tmp_path):
+    api = FakeAPI([update(1, "/burst@ProjectNull_bot 3")])
+    instance, store = shell(tmp_path, api)
+    instance.poll_once()
+    codes = [instance._review_code(item["probe_id"])
+             for item in store.list("probe")]
+
+    api.updates = [update(
+        2,
+        "/feedback@ProjectNull_bot {"
+        f"{codes[0]} regression answered first result | "
+        f"{codes[1]} routing_change abstained second result | "
+        f"{codes[2]} discard refused third result"
+        "}")]
+    instance.poll_once()
+    receipt = [payload["text"] for method, payload in api.calls
+               if method == "sendMessage"][-1]
+    assert receipt.splitlines() == [
+        "Feedback batch results:",
+        f"1. {codes[0]} — Recorded regression; expected=answered.",
+        f"2. {codes[1]} — Recorded routing_change; expected=abstained.",
+        f"3. {codes[2]} — Recorded discard; expected=refused.",
+    ]
+    assert {item["note"] for item in store.list("feedback")} == {
+        "first result", "second result", "third result"}
+
+    api.updates = [update(
+        3, "/finalize@ProjectNull_bot {" + " | ".join(codes) + "}")]
+    instance.poll_once()
+    receipt = [payload["text"] for method, payload in api.calls
+               if method == "sendMessage"][-1]
+    assert [line.split(" — ", 1)[0] for line in receipt.splitlines()[1:]] == [
+        f"1. {codes[0]}", f"2. {codes[1]}", f"3. {codes[2]}"]
+    assert store.list("probe") == store.list("feedback") == []
+    assert len(store.list("export_candidate")) == 2
+
+
+def test_pipe_review_batches_reject_empty_or_mixed_entries(tmp_path):
+    api = FakeAPI([update(1, "/burst@ProjectNull_bot 2")])
+    instance, store = shell(tmp_path, api)
+    instance.poll_once()
+    codes = [instance._review_code(item["probe_id"])
+             for item in store.list("probe")]
+
+    api.updates = [update(
+        2,
+        "/feedback@ProjectNull_bot {"
+        f"{codes[0]} regression answered valid || "
+        f"{codes[1]} discard refused invalid"
+        "}")]
+    instance.poll_once()
+    error = [payload["text"] for method, payload in api.calls
+             if method == "sendMessage"][-1]
+    assert error == "pipe-separated review batch entries cannot be empty"
+    assert store.list("feedback") == []
+
+    api.updates = [update(
+        3,
+        "/feedback@ProjectNull_bot {"
+        f"{codes[0]} regression answered first\n"
+        f"{codes[1]} discard refused second | "
+        "000000000000 discard refused third"
+        "}")]
+    instance.poll_once()
+    error = [payload["text"] for method, payload in api.calls
+             if method == "sendMessage"][-1]
+    assert error == (
+        "pipe-separated review batch entries must each stay on one line")
+    assert store.list("feedback") == []
+
+    api.updates = [update(
+        4,
+        "/feedback@ProjectNull_bot {"
+        f"{codes[0]} regression answered first result"
+        f"{codes[1]} discard refused second result"
+        "}")]
+    instance.poll_once()
+    error = [payload["text"] for method, payload in api.calls
+             if method == "sendMessage"][-1]
+    assert error == "review batch appears to have collapsed; use | between entries"
+    assert store.list("feedback") == []
+
+
+def test_clean_feedback_supersedes_an_earlier_note_before_finalization(tmp_path):
+    api = FakeAPI([update(1, "/burst@ProjectNull_bot 1")])
+    times = iter([
+        "2026-08-11T14:00:00.000000Z",
+        "2026-08-11T14:00:01.000000Z",
+        "2026-08-11T14:00:02.000000Z",
+        "2026-08-11T14:00:03.000000Z",
+        "2026-08-11T14:00:04.000000Z",
+    ])
+    instance, store = shell(tmp_path, api, clock=lambda: next(times))
+    instance.poll_once()
+    code = instance._review_code(store.list("probe")[0]["probe_id"])
+
+    api.updates = [
+        update(2, f"/feedback@ProjectNull_bot {code} routing_change abstained "
+               "contaminated note"),
+        update(3, f"/feedback@ProjectNull_bot {code} regression answered clean"),
+        update(4, f"/finalize@ProjectNull_bot {code}"),
+    ]
+    instance.poll_once()
+    instance.poll_once()
+    instance.poll_once()
+
+    candidate = store.list("export_candidate")[0]
+    question = store.get(candidate["question_id"])
+    assert question["decision"] == "regression"
+    assert question["expected_outcome"] == "answered"
+    assert candidate["rationale"] == "Reviewer decision: regression. clean"
+    assert "contaminated" not in candidate["rationale"]
+    assert store.list("feedback") == []
+
+
 def test_feedback_batch_isolates_unknown_and_duplicate_codes(tmp_path):
     api = FakeAPI([update(1, "/burst@ProjectNull_bot 2")])
     instance, store = shell(tmp_path, api)

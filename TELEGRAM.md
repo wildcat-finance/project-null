@@ -36,14 +36,15 @@ Null's capability: Aleph accepts only the explicit command form above.
   question text or Telegram identifiers.
 - `/feedback@<NullBot> [review_code] <decision> <expected_outcome> [note]`
   records a judgement by code or by reply to a probe or its Aleph response.
-- `/feedback@<NullBot> { ... }` records up to twenty newline-separated,
-  explicitly coded judgements sequentially and returns one ordered receipt
-  line per entry.
+- `/feedback@<NullBot> { ... }` records up to twenty explicitly coded
+  judgements separated by newlines or `|`, sequentially, and returns one
+  ordered receipt line per entry. Prefer `|` when copying into Telegram because
+  it remains explicit if the client collapses line breaks.
 - `/finalize@<NullBot> [review_code]` finalises the latest judgement selected by
   code or reply, creates its anonymised candidate, and irreversibly purges the
   raw correlation.
-- `/finalize@<NullBot> { ... }` sequentially finalises up to twenty
-  newline-separated review codes with one ordered receipt line per entry.
+- `/finalize@<NullBot> { ... }` sequentially finalises up to twenty review
+  codes separated by newlines or `|`, with one ordered receipt line per entry.
 
 Use the explicit `@<NullBot>` form in groups. Under Group Privacy, a bare
 general command may be delivered to whichever bot most recently spoke instead.
@@ -59,7 +60,13 @@ invalid immediately after finalisation, and avoid dependence on historical
 message links that basic Telegram groups do not provide.
 
 Brace batches require explicit review codes; they never infer a probe from a
-reply. Blank lines are ignored, nested braces are rejected, and one malformed,
+reply. Newlines remain supported, while a single `|` is the copy-safe separator
+for a one-line Telegram message. The `|` character is therefore reserved and
+must not appear inside a batch note. Blank lines are ignored in newline mode;
+empty pipe entries and ambiguous mixtures of line and pipe separators are
+rejected before processing. A one-line batch containing multiple code-shaped
+fragments but no separator is likewise rejected as probably collapsed. Nested
+braces are rejected, and one malformed,
 unknown, duplicate, or already-finalised code fails only its own entry. Batch
 execution is ordered but not atomic: an accepted feedback record or completed
 finalisation is never rolled back because a later entry fails.
