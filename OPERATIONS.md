@@ -86,6 +86,27 @@ small developer group, then:
 Do not run a second batch merely to increase volume. Every unresolved result is
 reviewed or allowed to expire under the 30-day boundary first.
 
+## Acknowledge Aleph dispositions
+
+Aleph's importer emits a complete JSON report bound to one immutable Null
+export. Copy the reviewed report to the fixed service-owned inbox, then run the
+manual one-shot unit:
+
+```bash
+sudo install -o project-null -g project-null -m 600 \
+  /path/to/reviewed-report.json \
+  /var/lib/project-null/disposition-report.json
+sudo systemctl start project-null-disposition.service
+sudo journalctl -u project-null-disposition.service --since today --no-pager
+```
+
+The command rejects a wrong export ID, modified export bytes, missing or extra
+candidates, inconsistent counts, changed question text, and conflicting
+terminal replays before committing anything. An identical replay is idempotent.
+Accepted, duplicate, and rejected cases become resolved; deferred and
+`needs_review` cases remain in `candidate_pile`. The immutable export and every
+candidate record remain unchanged.
+
 ## Monitoring and failure alerts
 
 `monitor.py` emits scrubbed JSON and exits nonzero when the database, bot

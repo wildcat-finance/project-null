@@ -66,6 +66,12 @@ class ExportKind(str, Enum):
     CORPUS_PROPOSAL = "corpus_proposal"
 
 
+class CandidateResolution(str, Enum):
+    ACCEPTED = "accepted"
+    DUPLICATE = "duplicate"
+    REJECTED = "rejected"
+
+
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -294,8 +300,32 @@ class ExportCandidate:
         parse_utc(self.created_at)
 
 
+@dataclass(frozen=True)
+class CandidateDisposition:
+    record_type: ClassVar[str] = "candidate_disposition"
+    disposition_id: str
+    candidate_id: str
+    export_id: str
+    resolution: CandidateResolution
+    reference: str
+    report_id: str
+    acknowledged_at: str
+
+    def __post_init__(self) -> None:
+        _identifier(self.disposition_id, "disposition_id")
+        _identifier(self.candidate_id, "candidate_id")
+        if not re.fullmatch(r"[0-9a-f]{20}", self.export_id):
+            raise SchemaError("export_id must be a 20-character hexadecimal ID")
+        if not isinstance(self.resolution, CandidateResolution):
+            raise SchemaError("resolution must be a CandidateResolution")
+        _nonempty(self.reference, "disposition reference", 500)
+        if not re.fullmatch(r"[0-9a-f]{64}", self.report_id):
+            raise SchemaError("report_id must be a SHA-256 digest")
+        parse_utc(self.acknowledged_at)
+
+
 Record = (Scenario | Probe | Delivery | AlephOutcome | Feedback |
-          AnonymizedQuestion | ExportCandidate)
+          AnonymizedQuestion | ExportCandidate | CandidateDisposition)
 
 
 def to_dict(record: Record) -> dict[str, Any]:
@@ -315,7 +345,8 @@ def to_dict(record: Record) -> dict[str, Any]:
                for key, value in dataclasses.asdict(record).items()}
     result = {"schema_version": SCHEMA_VERSION,
               "record_type": record.record_type, **payload}
-    if record.record_type in ("anonymized_question", "export_candidate"):
+    if record.record_type in (
+            "anonymized_question", "export_candidate", "candidate_disposition"):
         forbidden = _FORBIDDEN_LONG_TERM_KEYS.intersection(result)
         if forbidden:
             raise SchemaError(
@@ -329,6 +360,7 @@ def record_id(record: Record) -> str:
         "delivery": "delivery_id", "aleph_outcome": "outcome_id",
         "feedback": "feedback_id", "anonymized_question": "question_id",
         "export_candidate": "candidate_id",
+        "candidate_disposition": "disposition_id",
     }.get(record.record_type)
     if primary is None or not hasattr(record, primary):
         raise SchemaError("record has no primary identifier")

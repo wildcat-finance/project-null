@@ -7,12 +7,13 @@ import json
 import os
 import pathlib
 import tempfile
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Mapping
 
 from .generator import (
     CATALOG_VERSION, MAX_BURST, MIXED_POLICY_VERSION, catalog_hash,
 )
+from .disposition import candidate_counts
 from .schema import RAW_RETENTION, SCHEMA_VERSION, parse_utc, utc_now
 from .store import Store
 
@@ -190,6 +191,7 @@ def health_report(store: Store, api, config: Config) -> dict:
     me = api.call("getMe")
     webhook = api.call("getWebhookInfo")
     peer_evidence = peer_reply_evidence(store)
+    candidates = candidate_counts(store)
     return {
         "ok": bool(store.integrity()
                    and isinstance(me.get("id"), int)
@@ -198,6 +200,7 @@ def health_report(store: Store, api, config: Config) -> dict:
                    and not webhook.get("url")),
         "database": {"integrity": store.integrity(),
                      "checkpoint": store.checkpoint("telegram")},
+        "candidates": asdict(candidates),
         "telegram": {"username": me.get("username"),
                      "privacy_mode": ("enabled" if
                                       me.get("can_read_all_group_messages") is not True

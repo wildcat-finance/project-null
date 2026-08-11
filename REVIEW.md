@@ -106,4 +106,7 @@ The candidate pile is the durable count of retained, finalised
 `export_candidate` records awaiting explicit downstream disposition. It is
 visible through `/status`, survives restarts, and is not reduced merely because
 the same set was published as an immutable export. Candidates remain proposals;
-the counter never implies automatic Aleph ingestion.
+the counter never implies automatic Aleph ingestion. A complete report from
+Aleph may resolve accepted, duplicate, and rejected candidates by adding
+separate terminal disposition records. Deferred and `needs_review` candidates
+remain in the pile.

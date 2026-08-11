@@ -14,6 +14,7 @@ from typing import Callable, Protocol
 
 from .anonymize import AnonymizationError, Anonymizer
 from .capture import OutcomeCapture
+from .disposition import candidate_counts
 from .generator import Generator, MAX_BURST
 from .operations import record_peer_reply_evidence
 from .schema import (
@@ -406,7 +407,7 @@ class TelegramShell:
                 f"candidate pile={pile_total}.")
 
     def _candidate_pile(self) -> int:
-        return len(self.store.list("export_candidate"))
+        return candidate_counts(self.store).unresolved
 
     @classmethod
     def _review_batch(cls, argument: str) -> tuple[str, ...] | None:
@@ -509,6 +510,7 @@ class TelegramShell:
         unresolved = sum(
             not self.store.list("feedback", probe_id=item["probe_id"])
             for item in self.store.list("probe"))
+        candidates = candidate_counts(self.store)
         self._reply(
             chat_id, message_id,
             f"Null is {'paused' if paused else 'running'}; "
@@ -516,7 +518,8 @@ class TelegramShell:
             f"mode={self.store.control('mode', 'mixed')}; "
             f"rate={self.limiter.limit}/{self.limiter.window}s; "
             f"max_burst={MAX_BURST}; unreviewed={unresolved}; "
-            f"candidate_pile={self._candidate_pile()}; "
+            f"candidate_pile={candidates.unresolved}; "
+            f"candidate_resolved={candidates.resolved}; "
             f"checkpoint={self.store.checkpoint('telegram')}.")
 
     def _generate(self, update_id: int, chat_id: int,

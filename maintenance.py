@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Run Null's retention and immutable-export maintenance once."""
 
+import dataclasses
 import json
 
 from project_null.anonymize import Anonymizer
+from project_null.disposition import candidate_counts
 from project_null.export import publish
 from project_null.operations import Config
 from project_null.store import Store
@@ -15,6 +17,7 @@ def main() -> int:
     try:
         report = Anonymizer(store).run()
         destination = publish(store, config.artifacts_path)
+        candidates = candidate_counts(store)
     finally:
         store.close()
     print(json.dumps({
@@ -22,6 +25,7 @@ def main() -> int:
         "deleted_raw": report.deleted_raw,
         "deleted_controls": report.deleted_controls,
         "export_id": destination.name,
+        "candidate_counts": dataclasses.asdict(candidates),
     }, sort_keys=True))
     return 0
 

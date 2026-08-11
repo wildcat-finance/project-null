@@ -23,7 +23,9 @@ Publishing the same candidate set returns the same immutable directory. If an
 existing export contains different bytes, publication fails rather than
 repairing history in place.
 
-Publication does not mark candidates resolved or remove them from Null's
-durable candidate pile. `/status` therefore reports the retained total awaiting
-an explicit downstream disposition workflow, regardless of how many immutable
-snapshots contain those candidates.
+Publication alone does not mark candidates resolved. Aleph returns a complete,
+export-bound disposition report after validating the immutable bytes. Null then
+validates that report against its own export and adds separate terminal records
+for accepted, duplicate, and rejected candidates. Deferred and `needs_review`
+cases remain in `candidate_pile`; `/status` reports terminal records separately.
+Neither acknowledgement nor publication edits or deletes candidate/export bytes.
