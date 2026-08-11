@@ -40,6 +40,24 @@ or finalisation. The reviewer can then work without a reply:
 /feedback@<NullBot> <review_code> <decision> <expected_outcome> [note]
 ```
 
+An operator can review up to twenty queue entries in one standalone message.
+The opening and closing braces surround newline-separated ordinary code-based
+feedback arguments. Reply inference is deliberately unavailable inside a
+batch:
+
+```text
+/feedback@<NullBot> {
+<review_code> <decision> <expected_outcome> [note]
+<review_code> <decision> <expected_outcome> [note]
+}
+```
+
+Null processes the lines sequentially and returns an ordered receipt with one
+line per submitted entry. An invalid or duplicate entry is reported on its own
+receipt line and does not erase valid siblings. The operation is intentionally
+not transactional across entries: successfully recorded feedback remains
+recorded if a later line fails.
+
 Decisions are `regression`, `corpus_gap`, `routing_change`,
 `live_data_requirement`, `rejection_test`, `duplicate`, or `discard`.
 Expected outcomes are `answered`, `pointed`, `refused`, `abstained`, or
@@ -57,6 +75,19 @@ uses the same review code:
 /finalize@<NullBot>
 /finalize@<NullBot> <review_code>
 ```
+
+Finalisation has the matching code-only batch form:
+
+```text
+/finalize@<NullBot> {
+<review_code>
+<review_code>
+}
+```
+
+Each successful line crosses the irreversible promotion boundary before the
+next line is attempted. Null returns one ordered result per code; a failed line
+does not roll back or hide successful finalisations.
 
 The code grants no capability and contains no Telegram identifier. Commands
 remain restricted to allowlisted operators in allowlisted chats. Finalisation

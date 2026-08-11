@@ -228,6 +228,114 @@ def test_unknown_review_code_fails_closed(tmp_path):
     assert store.list("feedback") == []
 
 
+def test_brace_review_batches_return_ordered_one_to_one_receipts(tmp_path):
+    api = FakeAPI([update(1, "/burst@ProjectNull_bot 3")])
+    instance, store = shell(tmp_path, api)
+    instance.poll_once()
+    codes = [instance._review_code(item["probe_id"])
+             for item in store.list("probe")]
+
+    api.updates = [update(
+        2,
+        "/feedback@ProjectNull_bot {\n"
+        f"{codes[0]} regression answered first result\n"
+        f"{codes[1]} routing_change refused second result\n"
+        f"{codes[2]} rejection_test refused third result\n"
+        "}")]
+    instance.poll_once()
+    feedback_receipt = [payload["text"] for method, payload in api.calls
+                        if method == "sendMessage"][-1]
+    assert feedback_receipt.splitlines() == [
+        "Feedback batch results:",
+        f"1. {codes[0]} — Recorded regression; expected=answered.",
+        f"2. {codes[1]} — Recorded routing_change; expected=refused.",
+        f"3. {codes[2]} — Recorded rejection_test; expected=refused.",
+    ]
+    assert {item["note"] for item in store.list("feedback")} == {
+        "first result", "second result", "third result"}
+
+    api.updates = [update(
+        3,
+        "/finalize@ProjectNull_bot {\n" + "\n".join(codes) + "\n}")]
+    instance.poll_once()
+    finalize_receipt = [payload["text"] for method, payload in api.calls
+                        if method == "sendMessage"][-1]
+    lines = finalize_receipt.splitlines()
+    assert lines[0] == "Finalize batch results:"
+    assert [line.split(" — ", 1)[0] for line in lines[1:]] == [
+        f"1. {codes[0]}", f"2. {codes[1]}", f"3. {codes[2]}"]
+    assert all("Finalized; candidates=1" in line for line in lines[1:])
+    assert store.list("probe") == store.list("feedback") == []
+    assert len(store.list("export_candidate")) == 3
+
+
+def test_feedback_batch_isolates_unknown_and_duplicate_codes(tmp_path):
+    api = FakeAPI([update(1, "/burst@ProjectNull_bot 2")])
+    instance, store = shell(tmp_path, api)
+    instance.poll_once()
+    codes = [instance._review_code(item["probe_id"])
+             for item in store.list("probe")]
+
+    api.updates = [update(
+        2,
+        "/feedback@ProjectNull_bot {\n"
+        f"{codes[0]} regression answered valid first\n"
+        "000000000000 regression answered unknown\n"
+        f"{codes[0]} regression answered duplicate\n"
+        f"{codes[1]} routing_change answered valid second\n"
+        "}")]
+    instance.poll_once()
+
+    receipt = [payload["text"] for method, payload in api.calls
+               if method == "sendMessage"][-1]
+    lines = receipt.splitlines()
+    assert len(lines) == 5
+    assert f"1. {codes[0]} — Recorded regression" in lines[1]
+    assert "2. 000000000000 — Error: review code is unknown" in lines[2]
+    assert f"3. {codes[0]} — Error: duplicate review code in batch" == lines[3]
+    assert f"4. {codes[1]} — Recorded routing_change" in lines[4]
+    assert len(store.list("feedback")) == 2
+
+    api.updates = [update(
+        3,
+        "/finalize@ProjectNull_bot {\n"
+        f"{codes[0]}\n"
+        "000000000000\n"
+        f"{codes[1]} unexpected text\n"
+        f"{codes[1]}\n"
+        "}")]
+    instance.poll_once()
+    receipt = [payload["text"] for method, payload in api.calls
+               if method == "sendMessage"][-1]
+    lines = receipt.splitlines()
+    assert f"1. {codes[0]} — Finalized; candidates=1" in lines[1]
+    assert "2. 000000000000 — Error: review code is unknown" in lines[2]
+    assert (f"3. {codes[1]} — Error: finalize batch entries must contain one "
+            "review code") == lines[3]
+    assert f"4. {codes[1]} — Finalized; candidates=1" in lines[4]
+    assert store.list("probe") == store.list("feedback") == []
+
+
+def test_review_batch_syntax_and_size_fail_closed(tmp_path):
+    oversized = "\n".join(
+        f"{index:012x} regression answered note" for index in range(21))
+    api = FakeAPI([update(
+        1, "/feedback@ProjectNull_bot {\n" + oversized + "\n}")])
+    instance, store = shell(tmp_path, api)
+    instance.poll_once()
+    error = [payload["text"] for method, payload in api.calls
+             if method == "sendMessage"][-1]
+    assert error == "review batch must contain at most 20 entries"
+    assert store.list("feedback") == []
+
+    api.updates = [update(
+        2, "/feedback@ProjectNull_bot {\n000000000000 regression answered")]
+    instance.poll_once()
+    error = [payload["text"] for method, payload in api.calls
+             if method == "sendMessage"][-1]
+    assert error == "review batch must end with }"
+
+
 def test_aleph_latency_uses_the_same_local_clock_as_delivery(tmp_path):
     times = iter([
         "2026-08-11T00:00:00.750000Z",
