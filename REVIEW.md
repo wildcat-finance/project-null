@@ -68,6 +68,12 @@ and note are raw records with the same exact 30-day expiry as other identifiable
 data. Review changes the proposed expected outcome; it never edits Aleph's
 corpus and never promotes a candidate automatically.
 
+Finalised `regression` and `rejection_test` records are also the only positive
+signals used by Null's question curriculum. They advance the relevant family
+from foundation to contextual and then adversarial. Other decisions record a
+gap, change request, duplicate, or discard and therefore do not certify mastery.
+The observed Aleph outcome alone never advances the curriculum.
+
 When the latest judgement is correct, the reviewer either replies once more or
 uses the same review code:
 

@@ -2,7 +2,9 @@ import json
 
 import pytest
 
-from project_null.generator import Generator, MIXED_POLICY_VERSION
+from project_null.generator import (
+    CURRICULUM_VERSION, Generator, MIXED_POLICY_VERSION,
+)
 from project_null.operations import (
     Config, OperationsError, health_report, publish_run,
     record_peer_reply_evidence, write_audit,
@@ -41,6 +43,7 @@ def test_public_configuration_and_run_hide_identity_and_token(tmp_path):
     assert record["configuration"]["aleph_bot_id"] == 8728174629
     assert (record["configuration"]["mixed_policy_version"]
             == MIXED_POLICY_VERSION)
+    assert record["configuration"]["curriculum_version"] == CURRICULUM_VERSION
     assert publish_run(config, "2026-08-11T00:00:00Z") == record
 
 
@@ -67,6 +70,7 @@ def test_health_and_audit_are_scrubbed(tmp_path):
     assert report["ok"] is True
     assert report["candidates"] == {
         "total": 0, "resolved": 0, "unresolved": 0}
+    assert report["curriculum"]["version"] == CURRICULUM_VERSION
     assert report["telegram"]["bot_to_bot_mode"] == "not_exposed_by_bot_api"
     assert report["telegram"]["peer_reply_evidence"] == {
         "captured": False, "count": 0, "last_observed_at": None}
