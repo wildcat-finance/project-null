@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "project-null"
 version = "0.1.0"
 description = "Adversarial Telegram question generation for Project Aleph"
+license = "Apache-2.0"
 requires-python = ">=3.11"
 
 [tool.pytest.ini_options]
