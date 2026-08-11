@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Project Null privacy maintenance daily
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=15min
+Persistent=true
+Unit=project-null-maintenance.service
+
+[Install]
+WantedBy=timers.target
