@@ -95,6 +95,7 @@ class Identity:
 
 class TelegramShell:
     _COMMAND = re.compile(r"^/(\w+)(?:@([A-Za-z0-9_]+))?(?:\s+(.*))?$", re.S)
+    _REVIEW_CODE = re.compile(r"^[0-9a-f]{12}$")
 
     def __init__(self, store: Store, generator: Generator, api: BotAPI,
                  *, aleph_username: str, aleph_bot_id: int,
@@ -227,6 +228,8 @@ class TelegramShell:
             self._set_mode(chat_id, message_id, argument)
         elif command == "status":
             self._status(chat_id, message_id)
+        elif command == "queue":
+            self._queue(chat_id, message_id)
         elif command == "probe":
             self._generate(update_id, chat_id, message_id, 1)
         elif command == "burst":
@@ -238,7 +241,7 @@ class TelegramShell:
         elif command == "feedback":
             self._feedback(chat_id, user_id, message_id, message, argument)
         elif command == "finalize":
-            self._finalize(chat_id, message_id, message)
+            self._finalize(chat_id, message_id, message, argument)
 
     def _observe_aleph(self, chat_id: int, sender: dict, message: dict) -> None:
         if (sender.get("id") != self.aleph_bot_id
@@ -265,18 +268,27 @@ class TelegramShell:
 
     def _feedback(self, chat_id: int, user_id: int, message_id: int,
                   message: dict, argument: str) -> None:
-        parts = argument.split(maxsplit=2)
+        parts = argument.split()
+        reply_probe = self._probe_from_reply(chat_id, message)
+        code_probe = None
+        decisions = {item.value for item in ReviewDecision}
+        if parts and parts[0].casefold() not in decisions:
+            code_probe = self._probe_from_review_code(parts.pop(0))
+        if reply_probe and code_probe and reply_probe != code_probe:
+            raise TelegramError("review code does not match the replied-to probe")
+        probe_id = code_probe or reply_probe
         if len(parts) < 2:
             raise TelegramError(
-                "feedback requires: <decision> <expected_outcome> [note]")
+                "feedback requires: [review_code] <decision> "
+                "<expected_outcome> [note]")
         try:
             decision, expected = ReviewDecision(parts[0]), OutcomeKind(parts[1])
         except ValueError as error:
             raise TelegramError("invalid feedback decision or outcome") from error
-        note = parts[2].strip() if len(parts) == 3 else "Reviewed in Telegram."
-        probe_id = self._probe_from_reply(chat_id, message)
+        note = " ".join(parts[2:]) or "Reviewed in Telegram."
         if not probe_id:
-            raise TelegramError("feedback reply is not correlated to a probe")
+            raise TelegramError(
+                "feedback needs a reply to a stored probe or a review code")
         created = self.clock()
         record = Feedback(
             feedback_id=stable_id("feedback", {
@@ -290,10 +302,17 @@ class TelegramShell:
         self._reply(chat_id, message_id,
                     f"Recorded {decision.value}; expected={expected.value}.")
 
-    def _finalize(self, chat_id: int, message_id: int, message: dict) -> None:
-        probe_id = self._probe_from_reply(chat_id, message)
+    def _finalize(self, chat_id: int, message_id: int,
+                  message: dict, argument: str) -> None:
+        reply_probe = self._probe_from_reply(chat_id, message)
+        code_probe = self._probe_from_review_code(
+            argument) if argument else None
+        if reply_probe and code_probe and reply_probe != code_probe:
+            raise TelegramError("review code does not match the replied-to probe")
+        probe_id = code_probe or reply_probe
         if not probe_id:
-            raise TelegramError("finalize reply is not correlated to a probe")
+            raise TelegramError(
+                "finalize needs a reply to a stored probe or a review code")
         try:
             report = Anonymizer(self.store).finalize(probe_id, self.clock())
         except AnonymizationError as error:
@@ -310,6 +329,51 @@ class TelegramShell:
         delivery = self.store.delivery_for_message(chat_id, reply_id)
         outcome = self.store.outcome_for_reply(reply_id)
         return (delivery or outcome or {}).get("probe_id")
+
+    @staticmethod
+    def _review_code(probe_id: str) -> str:
+        return probe_id.rsplit("_", 1)[-1][-12:]
+
+    def _probe_from_review_code(self, value: str) -> str:
+        code = value.strip().casefold()
+        if not self._REVIEW_CODE.fullmatch(code):
+            raise TelegramError("review code must be 12 hexadecimal characters")
+        matches = [item["probe_id"] for item in self.store.list("probe")
+                   if self._review_code(item["probe_id"]) == code]
+        if not matches:
+            raise TelegramError("review code is unknown or already finalized")
+        if len(matches) != 1:
+            raise TelegramError("review code is ambiguous")
+        return matches[0]
+
+    def _queue(self, chat_id: int, message_id: int) -> None:
+        probes = sorted(
+            self.store.list("probe"), key=lambda item: item["generated_at"])
+        if not probes:
+            self._reply(chat_id, message_id, "Review queue is empty.")
+            return
+        visible = probes[:20]
+        lines = []
+        for probe in visible:
+            scenario = self.store.get(probe["scenario_id"]) or {}
+            outcomes = self.store.list(
+                "aleph_outcome", probe_id=probe["probe_id"])
+            outcome = outcomes[-1] if outcomes else {}
+            state = ("finalize" if self.store.list(
+                "feedback", probe_id=probe["probe_id"]) else "feedback")
+            lines.append(
+                f"{self._review_code(probe['probe_id'])} "
+                f"family={scenario.get('family', 'unknown')} "
+                f"expected={scenario.get('expected_outcome', 'unknown')} "
+                f"observed={outcome.get('outcome', 'waiting')} "
+                f"route={outcome.get('route') or 'none'} state={state}")
+        heading = f"Review queue ({len(visible)}/{len(probes)}):"
+        username = self.identity.username
+        footer = (
+            f"Use /feedback@{username} <code> <decision> <expected> [note], "
+            f"then /finalize@{username} <code>.")
+        self._reply(chat_id, message_id,
+                    heading + "\n" + "\n".join(lines) + "\n" + footer)
 
     def _mode(self) -> ScenarioFamily | None:
         value = self.store.control("mode", "mixed")

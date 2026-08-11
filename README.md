@@ -45,10 +45,12 @@ explicit `@<NullBot>` form:
 - `/probe@<NullBot>` — generate and send one question;
 - `/burst@<NullBot> <n>` — send a bounded batch of one to ten questions;
 - `/mode@<NullBot> mixed|<family>` — select the mixed catalogue or one family;
-- `/feedback@<NullBot> <decision> <expected_outcome> [note]` — attach a human
-  judgement to the replied-to probe or Aleph answer;
-- `/finalize@<NullBot>` — anonymise a reviewed probe, purge its raw linkage, and place it
-  in the appropriate proposal queue;
+- `/queue@<NullBot>` — show unresolved probes with short review codes and only
+  their family, expected outcome, observed outcome, route, and review state;
+- `/feedback@<NullBot> [review_code] <decision> <expected_outcome> [note]` —
+  attach a human judgement by code or by replying to the stored probe or answer;
+- `/finalize@<NullBot> [review_code]` — anonymise a reviewed probe, purge its
+  raw linkage, and place it in the appropriate proposal queue;
 - `/pause@<NullBot>` and `/resume@<NullBot>` — disable or enable generation
   without losing state; and
 - `/status@<NullBot>` — show the current run, mode, rate limit, checkpoint, and

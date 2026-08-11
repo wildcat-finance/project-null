@@ -29,10 +29,13 @@ Null's capability: Aleph accepts only the explicit command form above.
 - `/mode@<NullBot> mixed|<family>` changes the versioned scenario mix.
 - `/pause@<NullBot>` and `/resume@<NullBot>` control generation durably.
 - `/status@<NullBot>` reports mode, checkpoint, and unresolved review count.
-- `/feedback@<NullBot> <decision> <expected_outcome> [note]` records a judgement when
-  sent as a reply to a probe or its Aleph response.
-- `/finalize@<NullBot>` finalises the latest judgement for the replied-to probe,
-  creates its anonymised candidate, and irreversibly purges the raw correlation.
+- `/queue@<NullBot>` reports unresolved records with short review codes and no
+  question text or Telegram identifiers.
+- `/feedback@<NullBot> [review_code] <decision> <expected_outcome> [note]`
+  records a judgement by code or by reply to a probe or its Aleph response.
+- `/finalize@<NullBot> [review_code]` finalises the latest judgement selected by
+  code or reply, creates its anonymised candidate, and irreversibly purges the
+  raw correlation.
 
 Use the explicit `@<NullBot>` form in groups. Under Group Privacy, a bare
 general command may be delivered to whichever bot most recently spoke instead.
@@ -40,6 +43,12 @@ general command may be delivered to whichever bot most recently spoke instead.
 Commands are accepted only from allowlisted operator IDs in allowlisted chats.
 Ambient text, commands for other bots, unapproved users, and bot-authored
 commands are ignored.
+
+Review codes are 12 hexadecimal characters derived from the existing private
+probe identifier. They confer no authority: chat and operator allowlists still
+gate every command. Codes resolve only while the raw probe exists, become
+invalid immediately after finalisation, and avoid dependence on historical
+message links that basic Telegram groups do not provide.
 
 ## Delivery semantics
 

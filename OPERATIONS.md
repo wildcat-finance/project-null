@@ -73,8 +73,8 @@ small developer group, then:
 2. set `/mode@<NullBot> mixed`;
 3. send `/resume@<NullBot>`, one `/burst@<NullBot> 3`, and immediately
    `/pause@<NullBot>`;
-4. review each correlated answer or timeout and explicitly finalise only the
-   cases worth retaining;
+4. run `/queue@<NullBot>`, review each correlated answer or timeout by its
+   short code, and explicitly finalise only the cases worth retaining;
 5. run maintenance and inspect candidate counts and manifest hashes, never raw
    question text in operational logs;
 6. tune the family mix or Aleph behavior while still paused; and
