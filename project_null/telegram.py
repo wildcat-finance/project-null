@@ -386,7 +386,8 @@ class TelegramShell:
                 seen.add(code)
                 probe_id = self._probe_from_review_code(code)
                 report = self._finalize_probe(probe_id)
-                result = self._batch_finalize_summary(report)
+                result = self._batch_finalize_summary(
+                    report, self._candidate_pile())
             except TelegramError as error:
                 result = f"Error: {error}"
             except (StoreError, ValueError):
@@ -395,13 +396,17 @@ class TelegramShell:
         return receipts
 
     @staticmethod
-    def _batch_finalize_summary(report) -> str:
+    def _batch_finalize_summary(report, pile_total: int) -> str:
         candidate_label = ("review candidate" if report.candidates == 1
                            else "review candidates")
         raw_label = ("raw record" if report.deleted_raw == 1
                      else "raw records")
         return (f"Created {report.candidates} {candidate_label}; "
-                f"purged {report.deleted_raw} {raw_label}.")
+                f"purged {report.deleted_raw} {raw_label}; "
+                f"candidate pile={pile_total}.")
+
+    def _candidate_pile(self) -> int:
+        return len(self.store.list("export_candidate"))
 
     @classmethod
     def _review_batch(cls, argument: str) -> tuple[str, ...] | None:
@@ -511,6 +516,7 @@ class TelegramShell:
             f"mode={self.store.control('mode', 'mixed')}; "
             f"rate={self.limiter.limit}/{self.limiter.window}s; "
             f"max_burst={MAX_BURST}; unreviewed={unresolved}; "
+            f"candidate_pile={self._candidate_pile()}; "
             f"checkpoint={self.store.checkpoint('telegram')}.")
 
     def _generate(self, update_id: int, chat_id: int,

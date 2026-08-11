@@ -57,8 +57,8 @@ explicit `@<NullBot>` form:
   in order, with an independent result line for each entry;
 - `/pause@<NullBot>` and `/resume@<NullBot>` — disable or enable generation
   without losing state; and
-- `/status@<NullBot>` — show the current run, mode, rate limit, checkpoint, and
-  unresolved reviews.
+- `/status@<NullBot>` — show the current run, mode, rate limit, checkpoint,
+  unresolved reviews, and durable finalised-candidate pile.
 
 Null must be rate-limited, visibly identifiable, and unable to respond recursively to its own output or another bot's output. Group delivery should use explicit bot commands and replies rather than relying on plain `@mentions`, which Telegram privacy mode does not reliably deliver to bots.
 

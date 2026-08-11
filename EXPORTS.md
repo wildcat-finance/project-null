@@ -22,3 +22,8 @@ not automatic ingestion, and a consequential correction may be reviewed sooner.
 Publishing the same candidate set returns the same immutable directory. If an
 existing export contains different bytes, publication fails rather than
 repairing history in place.
+
+Publication does not mark candidates resolved or remove them from Null's
+durable candidate pile. `/status` therefore reports the retained total awaiting
+an explicit downstream disposition workflow, regardless of how many immutable
+snapshots contain those candidates.

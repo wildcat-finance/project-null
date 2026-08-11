@@ -229,7 +229,7 @@ def test_unknown_review_code_fails_closed(tmp_path):
 
 
 def test_brace_review_batches_return_ordered_one_to_one_receipts(tmp_path):
-    api = FakeAPI([update(1, "/burst@ProjectNull_bot 3")])
+    api = FakeAPI([update(1, "/burst@ProjectNull_bot 4")])
     instance, store = shell(tmp_path, api)
     instance.poll_once()
     codes = [instance._review_code(item["probe_id"])
@@ -240,7 +240,8 @@ def test_brace_review_batches_return_ordered_one_to_one_receipts(tmp_path):
         "/feedback@ProjectNull_bot {\n"
         f"{codes[0]} regression answered first result\n"
         f"{codes[1]} routing_change refused second result\n"
-        f"{codes[2]} rejection_test refused third result\n"
+        f"{codes[2]} duplicate refused duplicate result\n"
+        f"{codes[3]} discard refused discarded result\n"
         "}")]
     instance.poll_once()
     feedback_receipt = [payload["text"] for method, payload in api.calls
@@ -249,10 +250,11 @@ def test_brace_review_batches_return_ordered_one_to_one_receipts(tmp_path):
         "Feedback batch results:",
         f"1. {codes[0]} — Recorded regression; expected=answered.",
         f"2. {codes[1]} — Recorded routing_change; expected=refused.",
-        f"3. {codes[2]} — Recorded rejection_test; expected=refused.",
+        f"3. {codes[2]} — Recorded duplicate; expected=refused.",
+        f"4. {codes[3]} — Recorded discard; expected=refused.",
     ]
     assert {item["note"] for item in store.list("feedback")} == {
-        "first result", "second result", "third result"}
+        "first result", "second result", "duplicate result", "discarded result"}
 
     api.updates = [update(
         3,
@@ -263,11 +265,18 @@ def test_brace_review_batches_return_ordered_one_to_one_receipts(tmp_path):
     lines = finalize_receipt.splitlines()
     assert lines[0] == "Finalize batch results:"
     assert [line.split(" — ", 1)[0] for line in lines[1:]] == [
-        f"1. {codes[0]}", f"2. {codes[1]}", f"3. {codes[2]}"]
-    assert all("Created 1 review candidate; purged 3 raw records." in line
-               for line in lines[1:])
+        f"1. {codes[0]}", f"2. {codes[1]}", f"3. {codes[2]}",
+        f"4. {codes[3]}"]
+    assert ("Created 1 review candidate; purged 3 raw records" in lines[1]
+            and "candidate pile=1." in lines[1])
+    assert ("Created 1 review candidate; purged 3 raw records" in lines[2]
+            and "candidate pile=2." in lines[2])
+    assert ("Created 0 review candidates; purged 3 raw records" in lines[3]
+            and "candidate pile=2." in lines[3])
+    assert ("Created 0 review candidates; purged 3 raw records" in lines[4]
+            and "candidate pile=2." in lines[4])
     assert store.list("probe") == store.list("feedback") == []
-    assert len(store.list("export_candidate")) == 3
+    assert len(store.list("export_candidate")) == 2
 
 
 def test_feedback_batch_isolates_unknown_and_duplicate_codes(tmp_path):
@@ -309,11 +318,13 @@ def test_feedback_batch_isolates_unknown_and_duplicate_codes(tmp_path):
     receipt = [payload["text"] for method, payload in api.calls
                if method == "sendMessage"][-1]
     lines = receipt.splitlines()
-    assert f"1. {codes[0]} — Created 1 review candidate" in lines[1]
+    assert (f"1. {codes[0]} — Created 1 review candidate" in lines[1]
+            and "candidate pile=1." in lines[1])
     assert "2. 000000000000 — Error: review code is unknown" in lines[2]
     assert (f"3. {codes[1]} — Error: finalize batch entries must contain one "
             "review code") == lines[3]
-    assert f"4. {codes[1]} — Created 1 review candidate" in lines[4]
+    assert (f"4. {codes[1]} — Created 1 review candidate" in lines[4]
+            and "candidate pile=2." in lines[4])
     assert store.list("probe") == store.list("feedback") == []
 
     api.updates = [update(
@@ -391,6 +402,34 @@ def test_status_reports_run_and_load_boundary(tmp_path):
               if method == "sendMessage"][-1]
     assert "run=run_0123456789abcdefabcd" in status
     assert "rate=6/60s" in status and "max_burst=10" in status
+    assert "candidate_pile=0" in status
+
+
+def test_status_candidate_pile_survives_restart(tmp_path):
+    api = FakeAPI([update(1, "/probe@ProjectNull_bot")])
+    instance, store = shell(tmp_path, api)
+    instance.poll_once()
+    code = instance._review_code(store.list("probe")[0]["probe_id"])
+
+    api.updates = [update(
+        2, f"/feedback@ProjectNull_bot {code} regression answered retained")]
+    instance.poll_once()
+    api.updates = [update(3, f"/finalize@ProjectNull_bot {code}")]
+    instance.poll_once()
+    api.updates = [update(4, "/status@ProjectNull_bot")]
+    instance.poll_once()
+    status = [payload["text"] for method, payload in api.calls
+              if method == "sendMessage"][-1]
+    assert "candidate_pile=1" in status
+
+    store.close()
+    restarted_api = FakeAPI([update(5, "/status@ProjectNull_bot")])
+    restarted, restarted_store = shell(tmp_path, restarted_api)
+    restarted.poll_once()
+    restarted_status = [payload["text"] for method, payload in restarted_api.calls
+                        if method == "sendMessage"][-1]
+    assert "candidate_pile=1" in restarted_status
+    restarted_store.close()
 
 
 def test_finalize_requires_review_and_reports_operator_error(tmp_path):

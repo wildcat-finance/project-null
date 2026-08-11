@@ -28,7 +28,8 @@ Null's capability: Aleph accepts only the explicit command form above.
 - `/burst@<NullBot> <n>` sends 1–10 bounded probes.
 - `/mode@<NullBot> mixed|<family>` changes the versioned scenario mix.
 - `/pause@<NullBot>` and `/resume@<NullBot>` control generation durably.
-- `/status@<NullBot>` reports mode, checkpoint, and unresolved review count.
+- `/status@<NullBot>` reports mode, checkpoint, unresolved raw reviews, and the
+  durable finalised-candidate pile.
 - `/queue@<NullBot>` reports unresolved records with short review codes and no
   question text or Telegram identifiers.
 - `/feedback@<NullBot> [review_code] <decision> <expected_outcome> [note]`
@@ -60,6 +61,12 @@ reply. Blank lines are ignored, nested braces are rejected, and one malformed,
 unknown, duplicate, or already-finalised code fails only its own entry. Batch
 execution is ordered but not atomic: an accepted feedback record or completed
 finalisation is never rolled back because a later entry fails.
+
+Every successful batch-finalisation receipt reports `candidate pile=<n>` after
+that entry. `/status` reports the same `candidate_pile=<n>` value after a
+restart. The pile counts retained `export_candidate` records, not raw probes or
+automatic corpus additions. Publishing an immutable export does not clear or
+resolve the pile; a downstream disposition workflow must do that explicitly.
 
 ## Delivery semantics
 

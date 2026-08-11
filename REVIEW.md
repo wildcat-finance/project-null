@@ -87,7 +87,9 @@ Finalisation has the matching code-only batch form:
 
 Each successful line crosses the irreversible promotion boundary before the
 next line is attempted. Null returns one ordered result per code; a failed line
-does not roll back or hide successful finalisations.
+does not roll back or hide successful finalisations. Each successful result
+also reports the retained candidate-pile total after that entry. Duplicate and
+discard judgements create no candidate, so their total remains unchanged.
 
 The code grants no capability and contains no Telegram identifier. Commands
 remain restricted to allowlisted operators in allowlisted chats. Finalisation
@@ -99,3 +101,9 @@ outcome, feedback, and delivery control before acknowledging success. Duplicate
 and discard decisions create no candidate but still purge the raw linkage.
 Without finalisation, raw state expires automatically at its exact deadline and
 the latest eligible judgement is retained then.
+
+The candidate pile is the durable count of retained, finalised
+`export_candidate` records awaiting explicit downstream disposition. It is
+visible through `/status`, survives restarts, and is not reduced merely because
+the same set was published as an immutable export. Candidates remain proposals;
+the counter never implies automatic Aleph ingestion.
