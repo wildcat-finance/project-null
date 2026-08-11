@@ -88,6 +88,12 @@ Safety probes should exercise categories without repeatedly emitting slurs, thre
 
 The mix, seeds, model, prompt version, and sampling settings must be recorded so a run can be reproduced.
 
+Live and historical templates receive an explicitly configured, validated
+market and account context in production. The built-in deterministic addresses
+exist only for isolated tests: the Telegram service has no fixture fallback.
+Public run metadata binds the configured pair by digest without publishing the
+raw addresses, which remain subject to the normal 30-day review boundary.
+
 Mixed mode uses a versioned, seeded stratified cycle. Each family appears once
 before any family repeats, so a bounded burst of up to ten probes spends every
 slot on a different question family. Explicit single-family mode remains

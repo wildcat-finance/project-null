@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import Callable
@@ -25,6 +26,7 @@ MAX_BURST = 10
 COVERAGE_INTERVAL = 3
 
 _MIXED_FAMILIES = tuple(ScenarioFamily)
+_ADDRESS = re.compile(r"\b0x[0-9a-fA-F]{40}\b")
 
 
 class ChallengeTier(str, Enum):
@@ -226,8 +228,13 @@ class Generated:
 
 
 class Generator:
-    def __init__(self, clock: Callable[[], str] = utc_now):
+    def __init__(self, clock: Callable[[], str] = utc_now,
+                 variables: dict[str, str] | None = None):
         self.clock = clock
+        # The deterministic fixture values remain useful for isolated tests.
+        # Production always supplies Config.probe_variables(), whose values are
+        # validated before Telegram or the state store is opened.
+        self.variables = dict(DEFAULT_VARIABLES if variables is None else variables)
 
     def generate(self, *, seed: int, index: int = 0,
                  family: ScenarioFamily | None = None,
@@ -240,9 +247,9 @@ class Generator:
             raise ValueError("tier must be a ChallengeTier")
         rng = random.Random(f"{seed}:{index}:{CATALOG_VERSION}")
         selected = family or self._mixed_family(seed, index)
+        values = {**self.variables, **(variables or {})}
         challenge = self._select_challenge(
-            selected, tier, seen_texts, rng)
-        values = {**DEFAULT_VARIABLES, **(variables or {})}
+            selected, tier, seen_texts, rng, values)
         text = challenge.text.format(**values)
         created = self.clock()
         run_id = stable_id("run", {"seed": seed, "version": CATALOG_VERSION})
@@ -277,7 +284,7 @@ class Generator:
                            plan: CoveragePlan, target: CoverageTarget,
                            variables: dict[str, str] | None,
                            curriculum_tier: ChallengeTier) -> Generated:
-        values = {**DEFAULT_VARIABLES, **(variables or {})}
+        values = {**self.variables, **(variables or {})}
         text = target.text.format(**values)
         created = self.clock()
         target_tier = ChallengeTier(target.tier)
@@ -331,9 +338,10 @@ class Generator:
 
     @staticmethod
     def _select_coverage_target(plan: CoveragePlan, seed: int, index: int,
-                                seen_texts: frozenset[str]) -> CoverageTarget:
+                                seen_texts: frozenset[str],
+                                variables: dict[str, str]) -> CoverageTarget:
         unseen = [target for target in plan.targets
-                  if normalise_question(target.text.format(**DEFAULT_VARIABLES))
+                  if normalise_question(target.text.format(**variables))
                   not in seen_texts]
         eligible = unseen or list(plan.targets)
         declared = [target for target in eligible
@@ -345,14 +353,15 @@ class Generator:
 
     @staticmethod
     def _select_challenge(family: ScenarioFamily, tier: ChallengeTier,
-                          seen_texts: frozenset[str], rng) -> Challenge:
+                          seen_texts: frozenset[str], rng,
+                          variables: dict[str, str]) -> Challenge:
         start = TIER_ORDER.index(tier)
         eligible = tuple(item for item in _CHALLENGES[family]
                          if TIER_ORDER.index(item.tier) >= start)
         for candidate_tier in TIER_ORDER[start:]:
             unseen = [item for item in eligible
                       if item.tier is candidate_tier
-                      and normalise_question(item.text.format(**DEFAULT_VARIABLES))
+                      and normalise_question(item.text.format(**variables))
                       not in seen_texts]
             if unseen:
                 return rng.choice(unseen)
@@ -382,7 +391,8 @@ class Generator:
             if (coverage is not None and family is None
                     and (index + 1) % COVERAGE_INTERVAL == 0):
                 target = self._select_coverage_target(
-                    coverage, seed, index, frozenset(selected_seen))
+                    coverage, seed, index, frozenset(selected_seen),
+                    self.variables)
                 item = self._generate_coverage(
                     seed=seed, index=index, plan=coverage, target=target,
                     variables=None,
@@ -400,9 +410,10 @@ class Generator:
 
 
 def normalise_question(text: str) -> str:
+    value = _ADDRESS.sub(" evm address ", text)
     return " ".join("".join(
         character if character.isalnum() else " "
-        for character in text.casefold()).split())
+        for character in value.casefold()).split())
 
 
 def challenge_text(challenge_id: str) -> str | None:

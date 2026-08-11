@@ -109,10 +109,15 @@ Each live process requires:
 - `NULL_TELEGRAM_TOKEN` — Null's separate Bot API token;
 - the allowlisted developer-group chat ID;
 - the allowlisted reviewer/operator user IDs; and
-- Aleph's bot username, defaulting to `ProjectAlephWildcat_bot`; and
-- Aleph's stable numeric bot ID in `NULL_ALEPH_BOT_ID`.
+- Aleph's bot username, defaulting to `ProjectAlephWildcat_bot`;
+- Aleph's stable numeric bot ID in `NULL_ALEPH_BOT_ID`;
+- a current public market in `NULL_PROBE_MARKET_ADDRESS`; and
+- a non-zero public account in `NULL_PROBE_ACCOUNT_ADDRESS`.
 
 Null requires both Aleph identity fields to match before recording a bot reply.
 Group commands without an explicit `@<NullBot>` target are ignored.
+The two probe addresses are validated at startup and remain inside the raw
+30-day review boundary. Public run records retain only their joint digest, and
+the deterministic fixture addresses used by unit tests are not a live fallback.
 
 Tokens never enter the SQLite store, logs, generated records, or repository.

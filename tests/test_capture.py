@@ -40,6 +40,14 @@ def test_refusal_point_and_unknown_shapes():
     assert classify("totally novel output")[0] is OutcomeKind.FAILED
 
 
+def test_rate_limit_is_a_harness_failure_not_an_answer_shape():
+    outcome, route, error = classify(
+        "Aleph is rate-limited for this chat and user. Please wait before asking again.")
+    assert outcome is OutcomeKind.FAILED
+    assert route == "rate_limited"
+    assert error == "rate_limited"
+
+
 def test_silence_becomes_failed_once(tmp_path):
     store = Store(str(tmp_path / "null.db"))
     prepared(store)

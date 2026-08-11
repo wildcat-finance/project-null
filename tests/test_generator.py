@@ -94,3 +94,27 @@ def test_seen_foundation_questions_push_selection_to_contextual():
 
     assert first.probe.text != second.probe.text
     assert third.probe.generator["tier"] == "contextual"
+
+
+def test_configured_context_replaces_fixture_addresses_and_stays_reproducible():
+    variables = {
+        "market_address": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "account_address": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    }
+    generator = Generator(clock=lambda: NOW, variables=variables)
+    item = generator.generate(
+        seed=1, family=ScenarioFamily.LIVE_DATA,
+        tier=ChallengeTier.CONTEXTUAL)
+
+    assert variables["market_address"] in item.probe.text
+    assert variables["account_address"] in item.probe.text
+    assert "0x0000000000000000000000000000000000000001" not in item.probe.text
+    assert item.scenario.variables == variables
+
+
+def test_address_values_do_not_defeat_novelty_memory():
+    left = normalise_question(
+        "Status for 0x1111111111111111111111111111111111111111")
+    right = normalise_question(
+        "Status for 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+    assert left == right == "status for evm address"

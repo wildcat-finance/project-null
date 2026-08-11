@@ -30,7 +30,8 @@ def main() -> int:
             store.set_control("paused", "true")
         api = TelegramHTTP()
         shell = TelegramShell(
-            store, Generator(), api, aleph_username=config.aleph_username,
+            store, Generator(variables=config.probe_variables()), api,
+            aleph_username=config.aleph_username,
             aleph_bot_id=config.aleph_bot_id,
             allowed_chat_ids=set(config.allowed_chat_ids),
             operator_user_ids=set(config.operator_user_ids),
