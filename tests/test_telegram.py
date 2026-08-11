@@ -44,13 +44,13 @@ def bot_reply(update_id, text, reply_to):
     return item
 
 
-def shell(tmp_path, api):
+def shell(tmp_path, api, clock=lambda: NOW):
     store = Store(str(tmp_path / "null.db"))
     instance = TelegramShell(
         store, Generator(clock=lambda: NOW), api,
         aleph_username="ProjectAlephWildcat_bot",
         aleph_bot_id=8728174629,
-        allowed_chat_ids={-100}, operator_user_ids={7}, clock=lambda: NOW)
+        allowed_chat_ids={-100}, operator_user_ids={7}, clock=clock)
     instance.startup()
     return instance, store
 
@@ -135,6 +135,30 @@ def test_aleph_reply_and_human_feedback_are_correlated(tmp_path):
     assert store.list("export_candidate")[0]["kind"] == "corpus_proposal"
     evidence = json.loads(store.control("peer_reply_evidence"))
     assert evidence == {"count": 1, "last_observed_at": NOW}
+
+
+def test_aleph_latency_uses_the_same_local_clock_as_delivery(tmp_path):
+    times = iter([
+        "2026-08-11T00:00:00.750000Z",
+        "2026-08-11T00:00:01.250000Z",
+    ])
+    api = FakeAPI([update(1, "/probe@ProjectNull_bot")])
+    instance, store = shell(tmp_path, api, clock=lambda: next(times))
+    instance.poll_once()
+    delivery = store.list("delivery")[0]
+    reply = bot_reply(
+        2, "I can't produce a supported answer right now.",
+        delivery["message_id"])
+    # The Bot API field is intentionally coarser and earlier than the local
+    # delivery timestamp; it must not collapse the observed latency to zero.
+    reply["message"]["date"] = 0
+    api.updates = [reply]
+
+    instance.poll_once()
+
+    outcome = store.list("aleph_outcome")[0]
+    assert outcome["latency_ms"] == 500
+    assert outcome["observed_at"] == "2026-08-11T00:00:01.250000Z"
 
 
 def test_aleph_identity_requires_numeric_id_and_username(tmp_path):

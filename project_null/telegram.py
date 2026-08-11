@@ -10,7 +10,6 @@ import urllib.error
 import urllib.request
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Callable, Protocol
 
 from .anonymize import AnonymizationError, Anonymizer
@@ -239,10 +238,10 @@ class TelegramShell:
         delivery = self.store.delivery_for_message(chat_id, reply_id)
         if delivery is None:
             return
+        # Telegram's message date has whole-second precision. Delivery uses the
+        # local UTC clock, so mixing those clocks can turn a valid sub-second
+        # round trip into a misleading zero. Measure receipt on the same clock.
         observed = self.clock()
-        if isinstance(message.get("date"), int):
-            observed = datetime.fromtimestamp(
-                message["date"], timezone.utc).isoformat().replace("+00:00", "Z")
         outcome = self.capture.observe(
             probe_id=delivery["probe_id"], reply_message_id=message_id,
             text=text, observed_at=observed)
