@@ -386,14 +386,22 @@ class TelegramShell:
                 seen.add(code)
                 probe_id = self._probe_from_review_code(code)
                 report = self._finalize_probe(probe_id)
-                result = (f"Finalized; candidates={report.candidates}; "
-                          f"raw_deleted={report.deleted_raw}.")
+                result = self._batch_finalize_summary(report)
             except TelegramError as error:
                 result = f"Error: {error}"
             except (StoreError, ValueError):
                 result = "Error: Null could not safely finalize this review."
             receipts.append(f"{index}. {label} — {result}")
         return receipts
+
+    @staticmethod
+    def _batch_finalize_summary(report) -> str:
+        candidate_label = ("review candidate" if report.candidates == 1
+                           else "review candidates")
+        raw_label = ("raw record" if report.deleted_raw == 1
+                     else "raw records")
+        return (f"Created {report.candidates} {candidate_label}; "
+                f"purged {report.deleted_raw} {raw_label}.")
 
     @classmethod
     def _review_batch(cls, argument: str) -> tuple[str, ...] | None:

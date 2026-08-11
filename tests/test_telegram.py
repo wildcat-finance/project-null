@@ -264,7 +264,8 @@ def test_brace_review_batches_return_ordered_one_to_one_receipts(tmp_path):
     assert lines[0] == "Finalize batch results:"
     assert [line.split(" — ", 1)[0] for line in lines[1:]] == [
         f"1. {codes[0]}", f"2. {codes[1]}", f"3. {codes[2]}"]
-    assert all("Finalized; candidates=1" in line for line in lines[1:])
+    assert all("Created 1 review candidate; purged 3 raw records." in line
+               for line in lines[1:])
     assert store.list("probe") == store.list("feedback") == []
     assert len(store.list("export_candidate")) == 3
 
@@ -308,12 +309,20 @@ def test_feedback_batch_isolates_unknown_and_duplicate_codes(tmp_path):
     receipt = [payload["text"] for method, payload in api.calls
                if method == "sendMessage"][-1]
     lines = receipt.splitlines()
-    assert f"1. {codes[0]} — Finalized; candidates=1" in lines[1]
+    assert f"1. {codes[0]} — Created 1 review candidate" in lines[1]
     assert "2. 000000000000 — Error: review code is unknown" in lines[2]
     assert (f"3. {codes[1]} — Error: finalize batch entries must contain one "
             "review code") == lines[3]
-    assert f"4. {codes[1]} — Finalized; candidates=1" in lines[4]
+    assert f"4. {codes[1]} — Created 1 review candidate" in lines[4]
     assert store.list("probe") == store.list("feedback") == []
+
+    api.updates = [update(
+        4, f"/finalize@ProjectNull_bot {{\n{codes[0]}\n}}")]
+    instance.poll_once()
+    receipt = [payload["text"] for method, payload in api.calls
+               if method == "sendMessage"][-1]
+    assert (f"1. {codes[0]} — Error: review code is unknown or already "
+            "finalized") in receipt
 
 
 def test_review_batch_syntax_and_size_fail_closed(tmp_path):
