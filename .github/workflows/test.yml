@@ -21,4 +21,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install pytest
       - run: python -m pytest
-      - run: python -m compileall -q project_null serve.py monitor.py maintenance.py
+      - run: >-
+          python -m compileall -q project_null serve.py monitor.py maintenance.py
+          disposition.py

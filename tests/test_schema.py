@@ -3,8 +3,9 @@ from datetime import datetime, timezone
 import pytest
 
 from project_null.schema import (
-    AnonymizedQuestion, OutcomeKind, Provenance, ReviewDecision,
-    ScenarioFamily, SchemaError, Probe, raw_expiry, stable_id, to_dict,
+    AnonymizedQuestion, CandidateDisposition, CandidateResolution,
+    OutcomeKind, Provenance, ReviewDecision, ScenarioFamily, SchemaError,
+    Probe, raw_expiry, stable_id, to_dict,
 )
 
 NOW = "2026-08-11T00:00:00Z"
@@ -60,3 +61,19 @@ def test_long_term_record_has_no_identity_fields():
     payload = to_dict(record)
     assert not {"chat_id", "user_id", "message_id"}.intersection(payload)
     assert payload["provenance"] == "synthetic"
+
+
+def test_candidate_disposition_is_scrubbed_and_content_bound():
+    candidate_id = stable_id("candidate", {"x": 1})
+    record = CandidateDisposition(
+        disposition_id=stable_id("disposition", {"candidate_id": candidate_id}),
+        candidate_id=candidate_id,
+        export_id="1" * 20,
+        resolution=CandidateResolution.ACCEPTED,
+        reference="q01",
+        report_id="2" * 64,
+        acknowledged_at=NOW,
+    )
+    payload = to_dict(record)
+    assert payload["resolution"] == "accepted"
+    assert not {"chat_id", "user_id", "message_id"}.intersection(payload)

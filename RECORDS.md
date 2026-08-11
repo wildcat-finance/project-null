@@ -13,6 +13,7 @@ truth. `project_null/schema.py` is the executable schema. Every record carries
 | Feedback | Human judgement | Reviewer ID and note | 30 days |
 | Anonymized question | Reviewed long-term question | Forbidden | Indefinite |
 | Export candidate | Proposed regression or corpus gap | Forbidden | Indefinite |
+| Candidate disposition | Terminal downstream acceptance, duplicate, or rejection | Forbidden | Indefinite |
 
 The raw clock is exact: `raw_expires_at = created_at + 30 × 24 hours` in UTC.
 It is not “the end of the month” and cannot be extended by a later review.
@@ -22,3 +23,5 @@ synthetic material cannot be relabelled as production traffic.
 The SQLite store is append-only for records. Checkpoints may move only forward;
 pause/mode controls are explicit mutable state. Later anonymisation deletes raw
 records only after producing and validating their permitted long-term form.
+Downstream acknowledgement adds a separate terminal record; it never edits or
+deletes the candidate it resolves.

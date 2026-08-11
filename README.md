@@ -58,7 +58,8 @@ explicit `@<NullBot>` form:
 - `/pause@<NullBot>` and `/resume@<NullBot>` — disable or enable generation
   without losing state; and
 - `/status@<NullBot>` — show the current run, mode, rate limit, checkpoint,
-  unresolved reviews, and durable finalised-candidate pile.
+  unresolved reviews, unresolved finalised-candidate pile, and downstream
+  resolved count.
 
 Null must be rate-limited, visibly identifiable, and unable to respond recursively to its own output or another bot's output. Group delivery should use explicit bot commands and replies rather than relying on plain `@mentions`, which Telegram privacy mode does not reliably deliver to bots.
 
@@ -119,7 +120,7 @@ changes.
 
 ### 1. Define the records — implemented
 
-Specify versioned schemas for scenarios, probes, Telegram deliveries, Aleph outcomes, reviewer feedback, anonymised questions, and export candidates. Define the outcome taxonomy and the exact 30-day retention clock before collecting anything.
+Specify versioned schemas for scenarios, probes, Telegram deliveries, Aleph outcomes, reviewer feedback, anonymised questions, export candidates, and terminal downstream dispositions. Define the outcome taxonomy and the exact 30-day retention clock before collecting anything.
 
 ### 2. Build the Telegram shell — implemented
 
@@ -149,7 +150,7 @@ Run and test the 30-day purge/anonymisation job. Demonstrate that retained fixtu
 
 ### 7. Export evaluation candidates — implemented
 
-Produce reviewable, versioned artifacts that Aleph can ingest deliberately: questions, expected routes/outcomes, rationale, provenance class, and any approved evidence targets. Keep corpus proposals separate from regression tests.
+Produce reviewable, versioned artifacts that Aleph can ingest deliberately: questions, expected routes/outcomes, rationale, provenance class, and any approved evidence targets. Keep corpus proposals separate from regression tests. Import Aleph's complete acknowledgement report explicitly so accepted, duplicate, and rejected cases leave the unresolved pile without rewriting the candidate or export.
 
 ### 8. Operate the loop — active rollout
 
@@ -184,8 +185,8 @@ generation is one component.
 The repository implements the full first-milestone system: versioned records,
 durable checkpoints, deterministic generation, Telegram commands and loop
 prevention, observable Aleph outcome capture, human review, secure
-anonymisation, immutable exports, run manifests, scrubbed audits, monitoring,
-maintenance, and hardened service units.
+anonymisation, immutable exports, downstream candidate acknowledgements, run
+manifests, scrubbed audits, monitoring, maintenance, and hardened service units.
 
 The reference deployment has its separate token and allowlists installed,
 Bot-to-Bot Communication Mode enabled for Null, and Null's numeric ID authorized

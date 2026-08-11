@@ -65,6 +65,8 @@ def test_health_and_audit_are_scrubbed(tmp_path):
     store.set_control("paused", "true")
     report = health_report(store, API(), config)
     assert report["ok"] is True
+    assert report["candidates"] == {
+        "total": 0, "resolved": 0, "unresolved": 0}
     assert report["telegram"]["bot_to_bot_mode"] == "not_exposed_by_bot_api"
     assert report["telegram"]["peer_reply_evidence"] == {
         "captured": False, "count": 0, "last_observed_at": None}
@@ -135,7 +137,8 @@ def test_health_fails_loud_on_malformed_peer_reply_evidence(tmp_path):
 def test_production_units_keep_state_bounded():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     for name in ("project-null.service", "project-null-monitor.service",
-                 "project-null-maintenance.service"):
+                 "project-null-maintenance.service",
+                 "project-null-disposition.service"):
         text = (root / "ops/systemd" / name).read_text()
         assert "NoNewPrivileges=true" in text
         assert "CapabilityBoundingSet=" in text

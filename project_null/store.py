@@ -85,7 +85,8 @@ class Store:
             rows.append((record.record_type, identifier, encoded,
                          payload.get("created_at") or payload.get("generated_at")
                          or payload.get("delivered_at") or payload.get("observed_at")
-                         or payload.get("anonymized_at"),
+                         or payload.get("anonymized_at")
+                         or payload.get("acknowledged_at"),
                          payload.get("raw_expires_at"), payload.get("probe_id")))
         try:
             with self.connection:

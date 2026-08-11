@@ -4,6 +4,9 @@ import re
 import pytest
 
 from project_null.generator import Generator
+from project_null.schema import (
+    CandidateDisposition, CandidateResolution, stable_id,
+)
 from project_null.store import Store
 from project_null.telegram import (
     TelegramHTTP, TelegramShell, TelegramTimeout,
@@ -429,6 +432,25 @@ def test_status_candidate_pile_survives_restart(tmp_path):
     restarted_status = [payload["text"] for method, payload in restarted_api.calls
                         if method == "sendMessage"][-1]
     assert "candidate_pile=1" in restarted_status
+    assert "candidate_resolved=0" in restarted_status
+
+    candidate_id = restarted_store.list("export_candidate")[0]["candidate_id"]
+    restarted_store.append(CandidateDisposition(
+        disposition_id=stable_id(
+            "disposition", {"candidate_id": candidate_id}),
+        candidate_id=candidate_id,
+        export_id="1" * 20,
+        resolution=CandidateResolution.ACCEPTED,
+        reference="q01",
+        report_id="2" * 64,
+        acknowledged_at=NOW,
+    ))
+    restarted_api.updates = [update(6, "/status@ProjectNull_bot")]
+    restarted.poll_once()
+    resolved_status = [payload["text"] for method, payload in restarted_api.calls
+                       if method == "sendMessage"][-1]
+    assert "candidate_pile=0" in resolved_status
+    assert "candidate_resolved=1" in resolved_status
     restarted_store.close()
 
 
