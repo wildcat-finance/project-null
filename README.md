@@ -49,12 +49,16 @@ explicit `@<NullBot>` form:
   their family, expected outcome, observed outcome, route, and review state;
 - `/feedback@<NullBot> [review_code] <decision> <expected_outcome> [note]` —
   attach a human judgement by code or by replying to the stored probe or answer;
+- `/feedback@<NullBot> { ... }` — process up to twenty newline-separated coded
+  judgements and return one ordered result line for each entry;
 - `/finalize@<NullBot> [review_code]` — anonymise a reviewed probe, purge its
   raw linkage, and place it in the appropriate proposal queue;
+- `/finalize@<NullBot> { ... }` — finalise up to twenty newline-separated codes
+  in order, with an independent result line for each entry;
 - `/pause@<NullBot>` and `/resume@<NullBot>` — disable or enable generation
   without losing state; and
-- `/status@<NullBot>` — show the current run, mode, rate limit, checkpoint, and
-  unresolved reviews.
+- `/status@<NullBot>` — show the current run, mode, rate limit, checkpoint,
+  unresolved reviews, and durable finalised-candidate pile.
 
 Null must be rate-limited, visibly identifiable, and unable to respond recursively to its own output or another bot's output. Group delivery should use explicit bot commands and replies rather than relying on plain `@mentions`, which Telegram privacy mode does not reliably deliver to bots.
 

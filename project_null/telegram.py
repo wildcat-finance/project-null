@@ -96,6 +96,7 @@ class Identity:
 class TelegramShell:
     _COMMAND = re.compile(r"^/(\w+)(?:@([A-Za-z0-9_]+))?(?:\s+(.*))?$", re.S)
     _REVIEW_CODE = re.compile(r"^[0-9a-f]{12}$")
+    _REVIEW_BATCH_LIMIT = 20
 
     def __init__(self, store: Store, generator: Generator, api: BotAPI,
                  *, aleph_username: str, aleph_bot_id: int,
@@ -268,11 +269,24 @@ class TelegramShell:
 
     def _feedback(self, chat_id: int, user_id: int, message_id: int,
                   message: dict, argument: str) -> None:
+        batch = self._review_batch(argument)
+        if batch is not None:
+            receipts = self._feedback_batch(user_id, message_id, batch)
+            self._reply(chat_id, message_id,
+                        "Feedback batch results:\n" + "\n".join(receipts))
+            return
+        response = self._record_feedback(
+            user_id, message_id, argument,
+            reply_probe=self._probe_from_reply(chat_id, message))
+        self._reply(chat_id, message_id, response)
+
+    def _record_feedback(self, user_id: int, message_id: int, argument: str,
+                         *, reply_probe: str | None = None,
+                         explicit_code: bool = False) -> str:
         parts = argument.split()
-        reply_probe = self._probe_from_reply(chat_id, message)
         code_probe = None
         decisions = {item.value for item in ReviewDecision}
-        if parts and parts[0].casefold() not in decisions:
+        if parts and (explicit_code or parts[0].casefold() not in decisions):
             code_probe = self._probe_from_review_code(parts.pop(0))
         if reply_probe and code_probe and reply_probe != code_probe:
             raise TelegramError("review code does not match the replied-to probe")
@@ -299,11 +313,41 @@ class TelegramShell:
             created_at=created, raw_expires_at=raw_expiry(created))
         if self.store.get(record.feedback_id) is None:
             self.store.append(record)
-        self._reply(chat_id, message_id,
-                    f"Recorded {decision.value}; expected={expected.value}.")
+        return f"Recorded {decision.value}; expected={expected.value}."
+
+    def _feedback_batch(self, user_id: int, message_id: int,
+                        entries: tuple[str, ...]) -> list[str]:
+        receipts = []
+        seen = set()
+        for index, entry in enumerate(entries, 1):
+            parts = entry.split(maxsplit=1)
+            candidate = parts[0].casefold() if parts else ""
+            label = (candidate if self._REVIEW_CODE.fullmatch(candidate)
+                     else "invalid-code")
+            code = label
+            try:
+                code = self._entry_code(entry)
+                label = code
+                if code in seen:
+                    raise TelegramError("duplicate review code in batch")
+                seen.add(code)
+                result = self._record_feedback(
+                    user_id, message_id, entry, explicit_code=True)
+            except TelegramError as error:
+                result = f"Error: {error}"
+            except (StoreError, ValueError):
+                result = "Error: Null could not safely record this feedback."
+            receipts.append(f"{index}. {label} — {result}")
+        return receipts
 
     def _finalize(self, chat_id: int, message_id: int,
                   message: dict, argument: str) -> None:
+        batch = self._review_batch(argument)
+        if batch is not None:
+            receipts = self._finalize_batch(batch)
+            self._reply(chat_id, message_id,
+                        "Finalize batch results:\n" + "\n".join(receipts))
+            return
         reply_probe = self._probe_from_reply(chat_id, message)
         code_probe = self._probe_from_review_code(
             argument) if argument else None
@@ -313,14 +357,84 @@ class TelegramShell:
         if not probe_id:
             raise TelegramError(
                 "finalize needs a reply to a stored probe or a review code")
-        try:
-            report = Anonymizer(self.store).finalize(probe_id, self.clock())
-        except AnonymizationError as error:
-            raise TelegramError(str(error)) from error
+        report = self._finalize_probe(probe_id)
         self._reply(
             chat_id, message_id,
             f"Finalized review; candidates={report.candidates}; "
             f"raw_deleted={report.deleted_raw}.")
+
+    def _finalize_probe(self, probe_id: str):
+        try:
+            return Anonymizer(self.store).finalize(probe_id, self.clock())
+        except AnonymizationError as error:
+            raise TelegramError(str(error)) from error
+
+    def _finalize_batch(self, entries: tuple[str, ...]) -> list[str]:
+        receipts = []
+        seen = set()
+        for index, entry in enumerate(entries, 1):
+            parts = entry.split(maxsplit=1)
+            candidate = parts[0].casefold() if parts else ""
+            label = (candidate if self._REVIEW_CODE.fullmatch(candidate)
+                     else "invalid-code")
+            code = label
+            try:
+                code = self._entry_code(entry, code_only=True)
+                label = code
+                if code in seen:
+                    raise TelegramError("duplicate review code in batch")
+                seen.add(code)
+                probe_id = self._probe_from_review_code(code)
+                report = self._finalize_probe(probe_id)
+                result = self._batch_finalize_summary(
+                    report, self._candidate_pile())
+            except TelegramError as error:
+                result = f"Error: {error}"
+            except (StoreError, ValueError):
+                result = "Error: Null could not safely finalize this review."
+            receipts.append(f"{index}. {label} — {result}")
+        return receipts
+
+    @staticmethod
+    def _batch_finalize_summary(report, pile_total: int) -> str:
+        candidate_label = ("review candidate" if report.candidates == 1
+                           else "review candidates")
+        raw_label = ("raw record" if report.deleted_raw == 1
+                     else "raw records")
+        return (f"Created {report.candidates} {candidate_label}; "
+                f"purged {report.deleted_raw} {raw_label}; "
+                f"candidate pile={pile_total}.")
+
+    def _candidate_pile(self) -> int:
+        return len(self.store.list("export_candidate"))
+
+    @classmethod
+    def _review_batch(cls, argument: str) -> tuple[str, ...] | None:
+        value = argument.strip()
+        if not value.startswith("{"):
+            return None
+        if not value.endswith("}"):
+            raise TelegramError("review batch must end with }")
+        body = value[1:-1]
+        if "{" in body or "}" in body:
+            raise TelegramError("nested review batch braces are not allowed")
+        entries = tuple(line.strip() for line in body.splitlines()
+                        if line.strip())
+        if not entries:
+            raise TelegramError("review batch must contain at least one entry")
+        if len(entries) > cls._REVIEW_BATCH_LIMIT:
+            raise TelegramError(
+                f"review batch must contain at most {cls._REVIEW_BATCH_LIMIT} entries")
+        return entries
+
+    @classmethod
+    def _entry_code(cls, entry: str, *, code_only: bool = False) -> str:
+        parts = entry.split()
+        if not parts or not cls._REVIEW_CODE.fullmatch(parts[0].casefold()):
+            raise TelegramError("review code must be 12 hexadecimal characters")
+        if code_only and len(parts) != 1:
+            raise TelegramError("finalize batch entries must contain one review code")
+        return parts[0].casefold()
 
     def _probe_from_reply(self, chat_id: int, message: dict) -> str | None:
         reply_id = (message.get("reply_to_message") or {}).get("message_id")
@@ -371,7 +485,8 @@ class TelegramShell:
         username = self.identity.username
         footer = (
             f"Use /feedback@{username} <code> <decision> <expected> [note], "
-            f"then /finalize@{username} <code>.")
+            f"then /finalize@{username} <code>. "
+            "Both commands accept brace batches with one coded entry per line.")
         self._reply(chat_id, message_id,
                     heading + "\n" + "\n".join(lines) + "\n" + footer)
 
@@ -401,6 +516,7 @@ class TelegramShell:
             f"mode={self.store.control('mode', 'mixed')}; "
             f"rate={self.limiter.limit}/{self.limiter.window}s; "
             f"max_burst={MAX_BURST}; unreviewed={unresolved}; "
+            f"candidate_pile={self._candidate_pile()}; "
             f"checkpoint={self.store.checkpoint('telegram')}.")
 
     def _generate(self, update_id: int, chat_id: int,
