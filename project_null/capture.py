@@ -29,8 +29,9 @@ def classify(text: str) -> tuple[OutcomeKind, str, str | None]:
         return OutcomeKind.FAILED, "error", "internal_error"
     if lower.startswith("aleph is rate-limited"):
         return OutcomeKind.FAILED, "rate_limited", "rate_limited"
-    has_explanation = "explanation\n" in lower
-    has_live = "current state\n" in lower
+    headings = {line.strip() for line in lower.splitlines()}
+    has_explanation = "explanation" in headings
+    has_live = bool({"current state", "transaction history"} & headings)
     if "premise correction\n" in lower:
         return OutcomeKind.ANSWERED, "correct", None
     if has_explanation and has_live:

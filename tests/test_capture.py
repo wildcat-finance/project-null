@@ -48,6 +48,29 @@ def test_rate_limit_is_a_harness_failure_not_an_answer_shape():
     assert error == "rate_limited"
 
 
+def test_transaction_history_heading_is_a_live_answer_shape():
+    text = (
+        "Transaction history\n\n"
+        "Latest 1 matching event(s) for Example Market (limit 1; withdrawal "
+        "request):\n"
+        "- Withdrawal request: 1 USDC; 2026-08-11T00:00:00+00:00; "
+        "block 1; transaction 0x" + "1" * 64 + "\n\n"
+        "Observed at Ethereum block 1 via Wildcat Data Gateway release v2.0.30.")
+    outcome, route, error = classify(text)
+    assert outcome is OutcomeKind.ANSWERED
+    assert route == "live"
+    assert error is None
+
+
+def test_transaction_history_words_without_the_heading_remain_unrecognized():
+    outcome, route, error = classify(
+        "This arbitrary sentence mentions transaction history but has no "
+        "reviewed response shape.")
+    assert outcome is OutcomeKind.FAILED
+    assert route == "unrecognized"
+    assert error == "unrecognized_format"
+
+
 def test_silence_becomes_failed_once(tmp_path):
     store = Store(str(tmp_path / "null.db"))
     prepared(store)
