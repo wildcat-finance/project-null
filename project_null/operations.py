@@ -10,6 +10,7 @@ import tempfile
 from dataclasses import asdict, dataclass
 from typing import Mapping
 
+from .coverage import CoveragePlan, disabled as disabled_coverage
 from .curriculum import derive as derive_curriculum
 from .generator import (
     CATALOG_VERSION, CURRICULUM_VERSION, MAX_BURST, MIXED_POLICY_VERSION,
@@ -37,6 +38,8 @@ class Config:
     operator_user_ids: frozenset[int]
     poll_timeout: int = 30
     source_revision: str = "development"
+    coverage_path: str | None = None
+    coverage_release_id: str | None = None
 
     def __post_init__(self) -> None:
         if not 0 <= self.poll_timeout <= 50:
@@ -45,6 +48,15 @@ class Config:
                 or not isinstance(self.aleph_bot_id, int)
                 or self.aleph_bot_id <= 0):
             raise OperationsError("NULL_ALEPH_BOT_ID must be a positive integer")
+        if bool(self.coverage_path) != bool(self.coverage_release_id):
+            raise OperationsError(
+                "NULL_ALEPH_COVERAGE and NULL_ALEPH_COVERAGE_RELEASE must be set together")
+        if (self.coverage_release_id is not None
+                and (len(self.coverage_release_id) != 20
+                     or any(character not in "0123456789abcdef"
+                            for character in self.coverage_release_id))):
+            raise OperationsError(
+                "NULL_ALEPH_COVERAGE_RELEASE must be a 20-character hexadecimal ID")
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] = os.environ):
@@ -82,6 +94,10 @@ class Config:
             operator_user_ids=ids("NULL_OPERATOR_USER_IDS"),
             poll_timeout=poll_timeout,
             source_revision=env.get("NULL_SOURCE_REVISION", "development"),
+            coverage_path=(env.get("NULL_ALEPH_COVERAGE", "").strip()
+                           or None),
+            coverage_release_id=(
+                env.get("NULL_ALEPH_COVERAGE_RELEASE", "").strip() or None),
         )
 
     def public(self) -> dict:
@@ -98,6 +114,8 @@ class Config:
             "mixed_policy_version": MIXED_POLICY_VERSION,
             "maximum_burst": MAX_BURST,
             "raw_retention_seconds": int(RAW_RETENTION.total_seconds()),
+            "coverage_configured": self.coverage_path is not None,
+            "coverage_release_id": self.coverage_release_id,
         }
 
 
@@ -120,10 +138,13 @@ def _atomic(path: pathlib.Path, data: bytes, mode: int) -> None:
             os.unlink(temporary)
 
 
-def publish_run(config: Config, started_at: str | None = None) -> dict:
+def publish_run(config: Config, started_at: str | None = None,
+                coverage: CoveragePlan | None = None) -> dict:
     record = {"schema_version": SCHEMA_VERSION,
               "started_at": started_at or utc_now(),
-              "configuration": config.public()}
+              "configuration": config.public(),
+              "coverage": (coverage.public() if coverage is not None
+                           else disabled_coverage())}
     run_id = hashlib.sha256(_bytes(record)).hexdigest()[:20]
     record = {"run_id": run_id, **record}
     path = pathlib.Path(config.artifacts_path).resolve() / "runs" / run_id / "run.json"
@@ -136,14 +157,17 @@ def publish_run(config: Config, started_at: str | None = None) -> dict:
 
 
 def write_audit(store: Store, config: Config, run_id: str,
-                observed_at: str | None = None) -> pathlib.Path | None:
+                observed_at: str | None = None,
+                coverage: CoveragePlan | None = None) -> pathlib.Path | None:
     """Write the first snapshot for a run and each scrubbed state transition."""
     timestamp = observed_at or utc_now()
     state = {"schema_version": SCHEMA_VERSION, "run_id": run_id,
              "record_counts": store.counts(),
              "paused": store.control("paused", "true") == "true",
              "mode": store.control("mode", "mixed"),
-             "curriculum": derive_curriculum(store).public()}
+             "curriculum": derive_curriculum(store).public(),
+             "coverage": (coverage.public() if coverage is not None
+                          else disabled_coverage())}
     state_sha256 = hashlib.sha256(_bytes(state)).hexdigest()
     if store.control(_AUDIT_STATE_CONTROL) == state_sha256:
         return None
@@ -191,22 +215,31 @@ def record_peer_reply_evidence(store: Store, observed_at: str) -> dict:
     return {"captured": True, **evidence}
 
 
-def health_report(store: Store, api, config: Config) -> dict:
+def health_report(store: Store, api, config: Config,
+                  coverage: CoveragePlan | None = None) -> dict:
     me = api.call("getMe")
     webhook = api.call("getWebhookInfo")
     peer_evidence = peer_reply_evidence(store)
     candidates = candidate_counts(store)
     curriculum = derive_curriculum(store)
+    coverage_matches = (
+        (coverage is None and config.coverage_path is None)
+        or (coverage is not None and config.coverage_path is not None
+            and coverage.release_id == config.coverage_release_id)
+    )
     return {
         "ok": bool(store.integrity()
                    and isinstance(me.get("id"), int)
                    and me.get("username")
                    and me.get("can_read_all_group_messages") is not True
-                   and not webhook.get("url")),
+                   and not webhook.get("url")
+                   and coverage_matches),
         "database": {"integrity": store.integrity(),
                      "checkpoint": store.checkpoint("telegram")},
         "candidates": asdict(candidates),
         "curriculum": curriculum.public(),
+        "coverage": (coverage.public() if coverage is not None
+                     else disabled_coverage()),
         "telegram": {"username": me.get("username"),
                      "privacy_mode": ("enabled" if
                                       me.get("can_read_all_group_messages") is not True

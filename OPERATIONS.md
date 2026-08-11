@@ -11,7 +11,7 @@ restart preserved every record count and produced no duplicate delivery.
 
 ## Per-deployment external inputs
 
-Each new deployment requires exactly these external values:
+Each new deployment requires these four external values:
 
 1. a separate Telegram Bot API token in `NULL_TELEGRAM_TOKEN`;
 2. the private developer-group chat ID;
@@ -21,10 +21,24 @@ Each new deployment requires exactly these external values:
 The repository already defaults to `ProjectAlephWildcat_bot`. Group Privacy
 stays enabled. Neither bot needs group administrator access.
 
+Coverage-guided generation adds two optional, paired inputs:
+
+- `NULL_ALEPH_COVERAGE`, the path to one published Aleph silhouette; and
+- `NULL_ALEPH_COVERAGE_RELEASE`, the exact active Aleph release ID it must
+  describe.
+
+Set neither to keep catalogue-only generation. Setting only one is a startup
+failure. Null validates the content address, release binding, count
+reconciliation, and exclusion boundary before opening the database or Telegram
+connection. A stale silhouette therefore cannot silently guide a newer Aleph
+release.
+
 ## Filesystem boundary
 
 - `/opt/project-null` — root-owned, read-only source and virtual environment;
 - `/etc/project-null/project-null.env` — root-owned `0600` configuration;
+- `/etc/project-null/aleph-coverage.json` — optional root-owned `0444`
+  answer-free coverage silhouette;
 - `/var/lib/project-null/null.db` — service-owned raw and review state; and
 - `/var/lib/project-null/artifacts` — run manifests, scrubbed audits, and
   immutable exports.
@@ -40,25 +54,30 @@ addressed `/resume@<NullBot>` command can enable probe generation.
 1. Install source and dependencies without the token.
 2. Create the service user and writable state directory.
 3. Place the root-only environment file.
-4. Run the full test suite.
-5. Run `monitor.py`; verify database integrity, token identity, Group Privacy,
+4. If coverage guidance is enabled, copy the silhouette published by the active
+   Aleph release to `/etc/project-null/aleph-coverage.json`, set both paired
+   variables, and run `monitor.py` once before starting the bot. Never copy
+   Aleph chunks, golden questions, answers, citations, or evaluation cases.
+5. Run the full test suite.
+6. Run `monitor.py`; verify database integrity, token identity, Group Privacy,
    and absent webhook.
-6. Read Null's numeric bot ID from `getMe`. On the Aleph host, set
+7. Read Null's numeric bot ID from `getMe`. On the Aleph host, set
    `ALEPH_PEER_BOT_IDS=<NullBotId>` in `/etc/aleph/telegram.env`, restart Aleph,
    and require its monitor to report `peer_bot_count: 1`. Aleph's peer path is
    default-closed and accepts only an explicitly targeted `/ask@AlephBot`.
-7. Add Null and Aleph to the private group and enable Bot-to-Bot Communication
+8. Add Null and Aleph to the private group and enable Bot-to-Bot Communication
    Mode for Null.
-8. Start the service and confirm `/status@<NullBot>` reports paused.
-9. Send `/mode@<NullBot> ordinary`, then `/resume@<NullBot>`, then one
+9. Start the service and confirm `/status@<NullBot>` reports paused and either
+   the exact silhouette/release pair or `coverage=disabled`.
+10. Send `/mode@<NullBot> ordinary`, then `/resume@<NullBot>`, then one
    `/probe@<NullBot>`.
-10. Confirm Aleph directly replies, Null records one outcome, and no loop occurs.
-11. Reply with `/feedback@<NullBot> regression answered rehearsal` and inspect
+11. Confirm Aleph directly replies, Null records one outcome, and no loop occurs.
+12. Reply with `/feedback@<NullBot> regression answered rehearsal` and inspect
     the count-only audit.
-12. Reply with `/finalize@<NullBot>`, run one maintenance pass, and verify the
+13. Reply with `/finalize@<NullBot>`, run one maintenance pass, and verify the
     immutable regression export contains one candidate while the raw probe link
     is gone.
-13. Re-pause before changing the question mix or widening access.
+14. Re-pause before changing the question mix or widening access.
 
 If the rehearsal is abandoned, remove Null's ID from `ALEPH_PEER_BOT_IDS` and
 restart Aleph. Do not leave a peer authorized merely because both bots have been
@@ -71,7 +90,8 @@ small developer group, then:
 
 1. confirm `/status@<NullBot>` reports paused and the intended rate limit;
    also record the curriculum version and foundation/contextual/adversarial
-   family counts as the wave's starting boundary;
+   family counts plus the active silhouette/release pair as the wave's starting
+   boundary;
 2. set `/mode@<NullBot> mixed`;
 3. send `/resume@<NullBot>`, one `/burst@<NullBot> 3`, and immediately
    `/pause@<NullBot>`; the versioned mixed policy assigns three distinct
@@ -94,6 +114,14 @@ Aleph's observed route, and Null's declared expectation do not. A gap remains a
 gap until a human review changes the evidence. The catalogue exposure ledger is
 non-identifying and survives raw deletion, so a restart or finalisation does not
 make an old synthetic challenge look unseen.
+
+When coverage mode is active, mixed bursts reserve every third slot for an
+unseen silhouette-derived target. Declared-gap topics come first; route, live,
+sparse, and other coverage edges follow. The remaining slots still use the
+review-driven family curriculum. An explicit single-family mode bypasses
+coverage targeting. Change the configured silhouette only while paused, rerun
+the monitor, restart the service, and verify the new identity in `/status`
+before resuming.
 
 ## Acknowledge Aleph dispositions
 
@@ -119,8 +147,9 @@ candidate record remain unchanged.
 ## Monitoring and failure alerts
 
 `monitor.py` emits scrubbed JSON and exits nonzero when the database, bot
-identity, Group Privacy, or webhook boundary fails. The five-minute systemd
-timer makes that status available to the host's alerting agent. Bot-to-Bot mode
+identity, Group Privacy, webhook, or configured coverage boundary fails. The
+five-minute systemd timer makes that status available to the host's alerting
+agent. Bot-to-Bot mode
 is not exposed by `getMe`, so the monitor labels the setting as not observable
 through the Bot API. It separately reports count-only evidence of captured Aleph
 replies and their latest observation time; this proves historical delivery but

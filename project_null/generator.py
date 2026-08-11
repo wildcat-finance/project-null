@@ -9,6 +9,10 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Callable
 
+from .coverage import (
+    COVERAGE_POLICY_VERSION, CoveragePlan, CoverageTarget, plan_hash,
+    target_text as coverage_target_text,
+)
 from .schema import (
     OutcomeKind, Probe, Provenance, Scenario, ScenarioFamily, raw_expiry,
     stable_id, utc_now,
@@ -18,6 +22,7 @@ CATALOG_VERSION = "challenges-v3"
 MIXED_POLICY_VERSION = "stratified-v1"
 CURRICULUM_VERSION = "reviewed-v1"
 MAX_BURST = 10
+COVERAGE_INTERVAL = 3
 
 _MIXED_FAMILIES = tuple(ScenarioFamily)
 
@@ -268,6 +273,76 @@ class Generator:
         )
         return Generated(scenario, probe)
 
+    def _generate_coverage(self, *, seed: int, index: int,
+                           plan: CoveragePlan, target: CoverageTarget,
+                           variables: dict[str, str] | None,
+                           curriculum_tier: ChallengeTier) -> Generated:
+        values = {**DEFAULT_VARIABLES, **(variables or {})}
+        text = target.text.format(**values)
+        created = self.clock()
+        target_tier = ChallengeTier(target.tier)
+        tier = TIER_ORDER[max(TIER_ORDER.index(target_tier),
+                              TIER_ORDER.index(curriculum_tier))]
+        coverage_catalog = plan_hash(plan)
+        run_id = stable_id("run", {
+            "seed": seed, "version": CATALOG_VERSION,
+            "silhouette_id": plan.silhouette_id,
+            "coverage_catalog": coverage_catalog,
+        })
+        basis = {
+            "run_id": run_id, "seed": seed, "index": index,
+            "family": target.family.value, "challenge": target.target_id,
+            "silhouette_id": plan.silhouette_id,
+            "release_id": plan.release_id,
+            "policy": COVERAGE_POLICY_VERSION,
+            "tier": tier.value,
+            "coverage_catalog": coverage_catalog,
+        }
+        scenario_id = stable_id("scenario", basis)
+        probe_id = stable_id("probe", {**basis, "text": text})
+        scenario = Scenario(
+            scenario_id=scenario_id, family=target.family,
+            expected_outcome=target.expected, seed=seed,
+            template_version=f"{COVERAGE_POLICY_VERSION}:{plan.silhouette_id}",
+            created_at=created,
+            variables={key: values[key] for key in sorted(values)
+                       if "{" + key + "}" in target.text},
+        )
+        probe = Probe(
+            probe_id=probe_id, scenario_id=scenario_id, run_id=run_id,
+            text=text, provenance=Provenance.SYNTHETIC,
+            generated_at=created, raw_expires_at=raw_expiry(created),
+            generator={
+                "kind": "coverage_challenge",
+                "version": COVERAGE_POLICY_VERSION,
+                "catalog_sha256": coverage_catalog,
+                "seed": seed, "index": index,
+                "challenge_id": target.target_id,
+                "tier": tier.value,
+                "selection": COVERAGE_POLICY_VERSION,
+                "silhouette_id": plan.silhouette_id,
+                "aleph_release_id": plan.release_id,
+                "evaluation_id": plan.evaluation_id,
+                "coverage_topic": target.topic,
+                "target_kind": target.kind,
+            },
+        )
+        return Generated(scenario, probe)
+
+    @staticmethod
+    def _select_coverage_target(plan: CoveragePlan, seed: int, index: int,
+                                seen_texts: frozenset[str]) -> CoverageTarget:
+        unseen = [target for target in plan.targets
+                  if normalise_question(target.text.format(**DEFAULT_VARIABLES))
+                  not in seen_texts]
+        eligible = unseen or list(plan.targets)
+        declared = [target for target in eligible
+                    if target.kind == "declared-gap"]
+        pool = declared or eligible
+        rng = random.Random(
+            f"{seed}:{index}:{plan.silhouette_id}:{COVERAGE_POLICY_VERSION}")
+        return rng.choice(sorted(pool, key=lambda item: item.target_id))
+
     @staticmethod
     def _select_challenge(family: ScenarioFamily, tier: ChallengeTier,
                           seen_texts: frozenset[str], rng) -> Challenge:
@@ -296,18 +371,29 @@ class Generator:
     def burst(self, *, seed: int, count: int,
               family: ScenarioFamily | None = None,
               tiers: dict[ScenarioFamily, ChallengeTier] | None = None,
-              seen_texts: frozenset[str] = frozenset()) -> tuple[Generated, ...]:
+              seen_texts: frozenset[str] = frozenset(),
+              coverage: CoveragePlan | None = None) -> tuple[Generated, ...]:
         if not 1 <= count <= MAX_BURST:
             raise ValueError(f"burst count must be between 1 and {MAX_BURST}")
         selected_seen = set(seen_texts)
         generated = []
         for index in range(count):
             selected_family = family or self._mixed_family(seed, index)
-            item = self.generate(
-                seed=seed, index=index, family=family,
-                tier=(tiers or {}).get(
-                    selected_family, ChallengeTier.FOUNDATION),
-                seen_texts=frozenset(selected_seen))
+            if (coverage is not None and family is None
+                    and (index + 1) % COVERAGE_INTERVAL == 0):
+                target = self._select_coverage_target(
+                    coverage, seed, index, frozenset(selected_seen))
+                item = self._generate_coverage(
+                    seed=seed, index=index, plan=coverage, target=target,
+                    variables=None,
+                    curriculum_tier=(tiers or {}).get(
+                        target.family, ChallengeTier.FOUNDATION))
+            else:
+                item = self.generate(
+                    seed=seed, index=index, family=family,
+                    tier=(tiers or {}).get(
+                        selected_family, ChallengeTier.FOUNDATION),
+                    seen_texts=frozenset(selected_seen))
             generated.append(item)
             selected_seen.add(normalise_question(item.probe.text))
         return tuple(generated)
@@ -326,4 +412,6 @@ def challenge_text(challenge_id: str) -> str | None:
             if challenge.challenge_id == challenge_id:
                 return normalise_question(
                     challenge.text.format(**DEFAULT_VARIABLES))
-    return None
+    coverage_text = coverage_target_text(challenge_id)
+    return (normalise_question(coverage_text.format(**DEFAULT_VARIABLES))
+            if coverage_text is not None else None)
