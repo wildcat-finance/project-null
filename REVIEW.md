@@ -16,6 +16,11 @@ and a bounded error kind. It deliberately does **not** retain Aleph's answer
 text. A delivery with no correlated answer after the configured timeout becomes
 a `failed` outcome with `route=silence`.
 
+Admission failures are not answer-quality evidence. Aleph's public rate-limit
+message is recorded as `outcome=failed`, `route=rate_limited`, and
+`error_kind=rate_limited`; reviewers discard that attempt and rerun it in a
+later bounded wave rather than creating an Aleph regression candidate.
+
 ## Human judgement
 
 A reviewer can reply to either the Null probe or the correlated Aleph response:

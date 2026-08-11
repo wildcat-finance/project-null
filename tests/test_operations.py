@@ -30,6 +30,8 @@ def environment(tmp_path):
         "NULL_OPERATOR_USER_IDS": "987654321",
         "NULL_ALEPH_USERNAME": "ProjectAlephWildcat_bot",
         "NULL_ALEPH_BOT_ID": "8728174629",
+        "NULL_PROBE_MARKET_ADDRESS": "0x1111111111111111111111111111111111111111",
+        "NULL_PROBE_ACCOUNT_ADDRESS": "0x2222222222222222222222222222222222222222",
         "NULL_SOURCE_REVISION": "abc1234",
         "NULL_TELEGRAM_TOKEN": "must-never-appear",
     }
@@ -59,8 +61,16 @@ def test_public_configuration_and_run_hide_identity_and_token(tmp_path):
     serialized = json.dumps(record)
     assert "must-never-appear" not in serialized
     assert "987654321" not in serialized
+    assert "0x1111111111111111111111111111111111111111" not in serialized
+    assert "0x2222222222222222222222222222222222222222" not in serialized
     assert record["configuration"]["allowed_chat_count"] == 1
     assert record["configuration"]["aleph_bot_id"] == 8728174629
+    assert record["configuration"]["probe_context_configured"] is True
+    assert len(record["configuration"]["probe_context_sha256"]) == 64
+    assert config.probe_variables() == {
+        "market_address": "0x1111111111111111111111111111111111111111",
+        "account_address": "0x2222222222222222222222222222222222222222",
+    }
     assert record["coverage"]["silhouette_id"] == "a" * 20
     assert "Which governance" not in serialized
     assert (record["configuration"]["mixed_policy_version"]
@@ -83,6 +93,17 @@ def test_config_requires_explicit_allowlists(tmp_path):
         Config.from_env({"NULL_ALLOWED_CHAT_IDS": "-100",
                          "NULL_OPERATOR_USER_IDS": "-7",
                          "NULL_ALEPH_BOT_ID": "8728174629"})
+
+
+def test_config_requires_nonzero_probe_context(tmp_path):
+    env = environment(tmp_path)
+    env.pop("NULL_PROBE_MARKET_ADDRESS")
+    with pytest.raises(OperationsError, match="PROBE_MARKET.*non-zero"):
+        Config.from_env(env)
+    env = environment(tmp_path)
+    env["NULL_PROBE_ACCOUNT_ADDRESS"] = "0x" + "0" * 40
+    with pytest.raises(OperationsError, match="PROBE_ACCOUNT.*non-zero"):
+        Config.from_env(env)
 
 
 def test_coverage_configuration_requires_a_path_and_release_pair(tmp_path):

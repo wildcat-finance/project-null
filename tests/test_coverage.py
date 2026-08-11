@@ -146,6 +146,24 @@ def test_mixed_bursts_insert_deterministic_coverage_slots(tmp_path):
         for target in plan.targets})
 
 
+def test_configured_context_reaches_coverage_guided_slots(tmp_path):
+    plan = load(str(write(tmp_path)), RELEASE)
+    variables = {
+        "market_address": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "account_address": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    }
+    generated = Generator(
+        clock=lambda: NOW, variables=variables).burst(
+            seed=77, count=6, coverage=plan)
+    coverage = [item for item in generated
+                if item.probe.generator["kind"] == "coverage_challenge"]
+
+    assert {item.probe.text for item in coverage}.issubset({
+        target.text.format(**variables) for target in plan.targets})
+    assert all("0x0000000000000000000000000000000000000001"
+               not in item.probe.text for item in generated)
+
+
 def test_review_tier_is_bound_to_coverage_probe_identity(tmp_path):
     plan = load(str(write(tmp_path)), RELEASE)
     generator = Generator(clock=lambda: NOW)

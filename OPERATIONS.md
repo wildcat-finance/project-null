@@ -11,12 +11,21 @@ restart preserved every record count and produced no duplicate delivery.
 
 ## Per-deployment external inputs
 
-Each new deployment requires these four external values:
+Each new deployment requires these six external values:
 
 1. a separate Telegram Bot API token in `NULL_TELEGRAM_TOKEN`;
 2. the private developer-group chat ID;
 3. one or more reviewer/operator Telegram user IDs; and
 4. Bot-to-Bot Communication Mode enabled for Null in BotFather.
+5. `NULL_PROBE_MARKET_ADDRESS`, one current public Wildcat market used only by
+   generated live and historical probes; and
+6. `NULL_PROBE_ACCOUNT_ADDRESS`, one non-zero public account used only by
+   account-scoped probes.
+
+Both probe addresses are validated before the database or Telegram connection
+opens. They remain in the 30-day raw review boundary and never appear in public
+run metadata; the run binds only their joint SHA-256. Fixture addresses are
+reserved for deterministic unit tests and are never a production fallback.
 
 The repository already defaults to `ProjectAlephWildcat_bot`. Group Privacy
 stays enabled. Neither bot needs group administrator access.

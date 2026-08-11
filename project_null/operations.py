@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import pathlib
+import re
 import tempfile
 from dataclasses import asdict, dataclass
 from typing import Mapping
@@ -36,6 +37,8 @@ class Config:
     aleph_bot_id: int
     allowed_chat_ids: frozenset[int]
     operator_user_ids: frozenset[int]
+    probe_market_address: str
+    probe_account_address: str
     poll_timeout: int = 30
     source_revision: str = "development"
     coverage_path: str | None = None
@@ -48,6 +51,13 @@ class Config:
                 or not isinstance(self.aleph_bot_id, int)
                 or self.aleph_bot_id <= 0):
             raise OperationsError("NULL_ALEPH_BOT_ID must be a positive integer")
+        for name, value in (
+                ("NULL_PROBE_MARKET_ADDRESS", self.probe_market_address),
+                ("NULL_PROBE_ACCOUNT_ADDRESS", self.probe_account_address)):
+            if (not re.fullmatch(r"0x[0-9a-fA-F]{40}", value)
+                    or int(value, 16) == 0):
+                raise OperationsError(
+                    f"{name} must be a non-zero Ethereum address")
         if bool(self.coverage_path) != bool(self.coverage_release_id):
             raise OperationsError(
                 "NULL_ALEPH_COVERAGE and NULL_ALEPH_COVERAGE_RELEASE must be set together")
@@ -92,6 +102,10 @@ class Config:
             aleph_bot_id=aleph_bot_id,
             allowed_chat_ids=ids("NULL_ALLOWED_CHAT_IDS"),
             operator_user_ids=ids("NULL_OPERATOR_USER_IDS"),
+            probe_market_address=env.get(
+                "NULL_PROBE_MARKET_ADDRESS", "").strip(),
+            probe_account_address=env.get(
+                "NULL_PROBE_ACCOUNT_ADDRESS", "").strip(),
             poll_timeout=poll_timeout,
             source_revision=env.get("NULL_SOURCE_REVISION", "development"),
             coverage_path=(env.get("NULL_ALEPH_COVERAGE", "").strip()
@@ -101,6 +115,8 @@ class Config:
         )
 
     def public(self) -> dict:
+        context = (self.probe_market_address.casefold() + ":"
+                   + self.probe_account_address.casefold()).encode()
         return {
             "aleph_username": self.aleph_username,
             "aleph_bot_id": self.aleph_bot_id,
@@ -108,6 +124,8 @@ class Config:
             "operator_count": len(self.operator_user_ids),
             "poll_timeout": self.poll_timeout,
             "source_revision": self.source_revision,
+            "probe_context_configured": True,
+            "probe_context_sha256": hashlib.sha256(context).hexdigest(),
             "catalog_version": CATALOG_VERSION,
             "catalog_sha256": catalog_hash(),
             "curriculum_version": CURRICULUM_VERSION,
@@ -116,6 +134,13 @@ class Config:
             "raw_retention_seconds": int(RAW_RETENTION.total_seconds()),
             "coverage_configured": self.coverage_path is not None,
             "coverage_release_id": self.coverage_release_id,
+        }
+
+    def probe_variables(self) -> dict[str, str]:
+        """Return private raw context only to the ephemeral probe generator."""
+        return {
+            "market_address": self.probe_market_address,
+            "account_address": self.probe_account_address,
         }
 
 
