@@ -10,7 +10,6 @@ import urllib.error
 import urllib.request
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Callable, Protocol
 
 from .anonymize import AnonymizationError, Anonymizer
@@ -26,6 +25,10 @@ from .store import Store, StoreError
 
 class TelegramError(RuntimeError):
     """Telegram or command state cannot be handled safely."""
+
+
+class TelegramTimeout(TelegramError):
+    """Telegram transport timed out before returning a Bot API response."""
 
 
 class BotAPI(Protocol):
@@ -52,7 +55,13 @@ class TelegramHTTP:
                 body = json.load(response)
         except urllib.error.HTTPError as error:
             raise TelegramError(f"Telegram {method} returned HTTP {error.code}")
-        except (urllib.error.URLError, json.JSONDecodeError) as error:
+        except TimeoutError as error:
+            raise TelegramTimeout(f"Telegram {method} timed out") from error
+        except urllib.error.URLError as error:
+            if isinstance(error.reason, TimeoutError):
+                raise TelegramTimeout(f"Telegram {method} timed out") from error
+            raise TelegramError(f"Telegram {method} failed: {error}")
+        except json.JSONDecodeError as error:
             raise TelegramError(f"Telegram {method} failed: {error}")
         if body.get("ok") is not True:
             raise TelegramError(f"Telegram {method} refused the request")
@@ -137,10 +146,15 @@ class TelegramShell:
         if self.identity is None:
             raise TelegramError("startup must pass before polling")
         offset = self.store.checkpoint("telegram")
-        updates = self.api.call("getUpdates", {
-            "offset": offset, "timeout": self.poll_timeout, "limit": 100,
-            "allowed_updates": ["message"],
-        })
+        try:
+            updates = self.api.call("getUpdates", {
+                "offset": offset, "timeout": self.poll_timeout, "limit": 100,
+                "allowed_updates": ["message"],
+            })
+        except TelegramTimeout:
+            # A long-poll read timeout is an empty iteration. No update was
+            # observed, so the durable checkpoint must remain unchanged.
+            return 0
         handled = 0
         for update in updates:
             update_id = update.get("update_id")
@@ -239,10 +253,10 @@ class TelegramShell:
         delivery = self.store.delivery_for_message(chat_id, reply_id)
         if delivery is None:
             return
+        # Telegram's message date has whole-second precision. Delivery uses the
+        # local UTC clock, so mixing those clocks can turn a valid sub-second
+        # round trip into a misleading zero. Measure receipt on the same clock.
         observed = self.clock()
-        if isinstance(message.get("date"), int):
-            observed = datetime.fromtimestamp(
-                message["date"], timezone.utc).isoformat().replace("+00:00", "Z")
         outcome = self.capture.observe(
             probe_id=delivery["probe_id"], reply_message_id=message_id,
             text=text, observed_at=observed)

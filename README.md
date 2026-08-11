@@ -113,6 +113,10 @@ Specify versioned schemas for scenarios, probes, Telegram deliveries, Aleph outc
 
 Implement polling, command handling, reply-based feedback, deduplication, rate limits, pause/resume, durable checkpoints, and loop prevention. Prove that restarts do not resend probes or lose feedback.
 
+Long-poll read timeouts are empty, uncheckpointed iterations rather than
+process failures. A send timeout remains an uncertain delivery boundary: Null
+confirms no delivery record and never retries that prepared probe automatically.
+
 ### 3. Build deterministic generation — implemented
 
 Start with templates and seeded mutations for each question family. Add model-generated variants only behind a strict envelope: declared intent, bounded length, provenance, reproducible settings, and no claim that generated facts are real.
