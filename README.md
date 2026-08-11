@@ -94,6 +94,21 @@ slot on a different question family. Explicit single-family mode remains
 available for targeted regression rehearsals. The policy version and catalogue
 hash are recorded with the run and each generated probe.
 
+Within each family, the checked-in challenge catalogue progresses through
+foundation, contextual, and adversarial tiers. Null prefers an unseen challenge
+at the family's current tier, then unseen higher-tier challenges, and repeats
+only after every eligible challenge has been exercised. A durable exposure
+record retains only catalogue ID, tier, family, hash, and time, so this novelty
+memory survives raw-question deletion without retaining Telegram identity or
+question text.
+
+Progression is based on retained human review, not Aleph's self-assessment.
+One reviewed `regression` or `rejection_test` advances a family to contextual;
+two advance it to adversarial. Corpus gaps, routing changes, live-data
+requirements, duplicates, and discards remain useful evidence but do not count
+as mastery. `/status` exposes only scrubbed counts and the active curriculum
+version.
+
 ## Data and privacy
 
 Raw inbound questions and associated Telegram identifiers may be retained for at most **30 days** for debugging and review.
@@ -132,7 +147,11 @@ confirms no delivery record and never retries that prepared probe automatically.
 
 ### 3. Build deterministic generation — implemented
 
-Start with templates and seeded mutations for each question family. Add model-generated variants only behind a strict envelope: declared intent, bounded length, provenance, reproducible settings, and no claim that generated facts are real.
+Use a versioned three-tier challenge catalogue for each family, deterministic
+seeded selection, durable novelty memory, and advancement based only on human
+review. Add model-generated variants only behind a strict envelope: declared
+intent, bounded length, provenance, reproducible settings, and no claim that
+generated facts are real.
 
 ### 4. Capture Aleph outcomes — implemented
 

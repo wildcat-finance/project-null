@@ -28,8 +28,9 @@ Null's capability: Aleph accepts only the explicit command form above.
 - `/burst@<NullBot> <n>` sends 1–10 bounded probes.
 - `/mode@<NullBot> mixed|<family>` changes the versioned scenario mix.
 - `/pause@<NullBot>` and `/resume@<NullBot>` control generation durably.
-- `/status@<NullBot>` reports mode, checkpoint, unresolved raw reviews, and the
-  durable finalised-candidate pile.
+- `/status@<NullBot>` reports mode, checkpoint, unresolved raw reviews, the
+  durable finalised-candidate pile, curriculum version, and scrubbed family-tier
+  counts.
 - `/queue@<NullBot>` reports unresolved records with short review codes and no
   question text or Telegram identifiers.
 - `/feedback@<NullBot> [review_code] <decision> <expected_outcome> [note]`
@@ -75,6 +76,13 @@ delivery state as `sending`. If the process dies around that network boundary,
 it will not automatically send the same probe again. An operator may need to
 reconcile a `sending` or `uncertain` probe, but restarts cannot cause a bot loop
 or duplicate flood.
+
+Preparing a catalogue challenge also writes one non-identifying exposure marker
+for that challenge ID and catalogue hash. The marker contains no question text
+or Telegram identifier and is not removed with raw data. It stops Null from
+forgetting a duplicate or discarded challenge after finalisation. A monotonic
+checkpoint is checked before every update in a returned batch, so duplicate
+copies of one Telegram update cannot consume two novelty slots or send twice.
 
 A Bot API read timeout during `getUpdates` is treated as an empty poll: no
 update is observed and the durable checkpoint does not advance. The same

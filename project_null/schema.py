@@ -274,6 +274,31 @@ class AnonymizedQuestion:
 
 
 @dataclass(frozen=True)
+class ChallengeExposure:
+    """Long-term, non-identifying proof that a synthetic challenge was used."""
+
+    record_type: ClassVar[str] = "challenge_exposure"
+    exposure_id: str
+    challenge_id: str
+    catalog_sha256: str
+    family: ScenarioFamily
+    tier: str
+    created_at: str
+
+    def __post_init__(self) -> None:
+        _identifier(self.exposure_id, "exposure_id")
+        if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", self.challenge_id):
+            raise SchemaError("challenge_id must be a catalogue identifier")
+        if not re.fullmatch(r"[0-9a-f]{64}", self.catalog_sha256):
+            raise SchemaError("catalog_sha256 must be a SHA-256 digest")
+        if not isinstance(self.family, ScenarioFamily):
+            raise SchemaError("challenge exposure family must be declared")
+        if self.tier not in {"foundation", "contextual", "adversarial"}:
+            raise SchemaError("challenge exposure tier is invalid")
+        parse_utc(self.created_at)
+
+
+@dataclass(frozen=True)
 class ExportCandidate:
     record_type: ClassVar[str] = "export_candidate"
     candidate_id: str
@@ -325,7 +350,8 @@ class CandidateDisposition:
 
 
 Record = (Scenario | Probe | Delivery | AlephOutcome | Feedback |
-          AnonymizedQuestion | ExportCandidate | CandidateDisposition)
+          AnonymizedQuestion | ChallengeExposure | ExportCandidate |
+          CandidateDisposition)
 
 
 def to_dict(record: Record) -> dict[str, Any]:
@@ -346,7 +372,8 @@ def to_dict(record: Record) -> dict[str, Any]:
     result = {"schema_version": SCHEMA_VERSION,
               "record_type": record.record_type, **payload}
     if record.record_type in (
-            "anonymized_question", "export_candidate", "candidate_disposition"):
+            "anonymized_question", "challenge_exposure", "export_candidate",
+            "candidate_disposition"):
         forbidden = _FORBIDDEN_LONG_TERM_KEYS.intersection(result)
         if forbidden:
             raise SchemaError(
@@ -359,6 +386,7 @@ def record_id(record: Record) -> str:
         "scenario": "scenario_id", "probe": "probe_id",
         "delivery": "delivery_id", "aleph_outcome": "outcome_id",
         "feedback": "feedback_id", "anonymized_question": "question_id",
+        "challenge_exposure": "exposure_id",
         "export_candidate": "candidate_id",
         "candidate_disposition": "disposition_id",
     }.get(record.record_type)

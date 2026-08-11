@@ -70,6 +70,8 @@ The reference deployment is at this boundary. Keep Null paused while adding the
 small developer group, then:
 
 1. confirm `/status@<NullBot>` reports paused and the intended rate limit;
+   also record the curriculum version and foundation/contextual/adversarial
+   family counts as the wave's starting boundary;
 2. set `/mode@<NullBot> mixed`;
 3. send `/resume@<NullBot>`, one `/burst@<NullBot> 3`, and immediately
    `/pause@<NullBot>`; the versioned mixed policy assigns three distinct
@@ -85,6 +87,13 @@ small developer group, then:
 
 Do not run a second batch merely to increase volume. Every unresolved result is
 reviewed or allowed to expire under the 30-day boundary first.
+
+Curriculum advancement is deliberately conservative. Only finalised retained
+reviews marked `regression` or `rejection_test` count as family mastery; volume,
+Aleph's observed route, and Null's declared expectation do not. A gap remains a
+gap until a human review changes the evidence. The catalogue exposure ledger is
+non-identifying and survives raw deletion, so a restart or finalisation does not
+make an old synthetic challenge look unseen.
 
 ## Acknowledge Aleph dispositions
 

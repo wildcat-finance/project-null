@@ -14,6 +14,7 @@ from typing import Callable, Protocol
 
 from .anonymize import AnonymizationError, Anonymizer
 from .capture import OutcomeCapture
+from .curriculum import derive as derive_curriculum, remember_exposure
 from .disposition import candidate_counts
 from .generator import Generator, MAX_BURST
 from .operations import record_peer_reply_evidence
@@ -161,7 +162,8 @@ class TelegramShell:
         handled = 0
         for update in updates:
             update_id = update.get("update_id")
-            if not isinstance(update_id, int) or update_id < offset:
+            if (not isinstance(update_id, int)
+                    or update_id < self.store.checkpoint("telegram")):
                 continue
             message = update.get("message") or {}
             try:
@@ -511,6 +513,10 @@ class TelegramShell:
             not self.store.list("feedback", probe_id=item["probe_id"])
             for item in self.store.list("probe"))
         candidates = candidate_counts(self.store)
+        curriculum = derive_curriculum(self.store).public()
+        tier_counts = ",".join(
+            f"{tier}:{count}"
+            for tier, count in curriculum["tier_counts"].items())
         self._reply(
             chat_id, message_id,
             f"Null is {'paused' if paused else 'running'}; "
@@ -520,6 +526,7 @@ class TelegramShell:
             f"max_burst={MAX_BURST}; unreviewed={unresolved}; "
             f"candidate_pile={candidates.unresolved}; "
             f"candidate_resolved={candidates.resolved}; "
+            f"curriculum={curriculum['version']}; tiers={tier_counts}; "
             f"checkpoint={self.store.checkpoint('telegram')}.")
 
     def _generate(self, update_id: int, chat_id: int,
@@ -529,8 +536,10 @@ class TelegramShell:
             return
         if not 1 <= count <= MAX_BURST:
             raise TelegramError(f"burst must be between 1 and {MAX_BURST}")
+        curriculum = derive_curriculum(self.store)
         generated = self.generator.burst(
-            seed=update_id, count=count, family=self._mode())
+            seed=update_id, count=count, family=self._mode(),
+            tiers=curriculum.tiers, seen_texts=curriculum.seen_texts)
         sent = 0
         for item in generated:
             if self._send_probe(chat_id, command_message_id, item):
@@ -542,6 +551,7 @@ class TelegramShell:
         probe_id = item.probe.probe_id
         if self.store.get(probe_id) is None:
             self.store.append_many([item.scenario, item.probe])
+        remember_exposure(self.store, item)
         state_key = f"delivery:{probe_id}"
         if self.store.control(state_key) is not None:
             return False

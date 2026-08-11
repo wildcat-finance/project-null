@@ -1,7 +1,8 @@
 import pytest
 
 from project_null.generator import (
-    Generator, MAX_BURST, MIXED_POLICY_VERSION, catalog_hash,
+    ChallengeTier, Generator, MAX_BURST, MIXED_POLICY_VERSION, catalog_hash,
+    normalise_question,
 )
 from project_null.schema import Provenance, ScenarioFamily
 
@@ -65,3 +66,31 @@ def test_explicit_family_bypasses_mixed_selection():
         ScenarioFamily.AMBIGUOUS}
     assert all(item.probe.generator["selection"] == "explicit_family"
                for item in burst)
+
+
+def test_family_curriculum_exhausts_unseen_tiers_before_repeating():
+    generator = Generator(clock=lambda: NOW)
+    burst = generator.burst(
+        seed=17, count=6, family=ScenarioFamily.ORDINARY)
+
+    assert len({item.probe.text for item in burst}) == 6
+    assert [item.probe.generator["tier"] for item in burst] == [
+        "foundation", "foundation", "contextual", "contextual",
+        "adversarial", "adversarial",
+    ]
+
+
+def test_seen_foundation_questions_push_selection_to_contextual():
+    generator = Generator(clock=lambda: NOW)
+    first = generator.generate(
+        seed=20, family=ScenarioFamily.NOVICE)
+    seen = frozenset({normalise_question(first.probe.text)})
+    second = generator.generate(
+        seed=21, family=ScenarioFamily.NOVICE, seen_texts=seen)
+    seen = frozenset({*seen, normalise_question(second.probe.text)})
+    third = generator.generate(
+        seed=22, family=ScenarioFamily.NOVICE,
+        tier=ChallengeTier.FOUNDATION, seen_texts=seen)
+
+    assert first.probe.text != second.probe.text
+    assert third.probe.generator["tier"] == "contextual"

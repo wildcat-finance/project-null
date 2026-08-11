@@ -187,6 +187,8 @@ def test_review_queue_codes_finalize_without_historical_reply(tmp_path):
     instance, store = shell(tmp_path, api)
     instance.poll_once()
     delivery = store.list("delivery")[0]
+    expected = store.scenario_for_probe(delivery["probe_id"])[
+        "expected_outcome"]
     api.updates = [bot_reply(
         2, "I can't produce a supported answer right now.",
         delivery["message_id"])]
@@ -197,14 +199,14 @@ def test_review_queue_codes_finalize_without_historical_reply(tmp_path):
     queue = [payload["text"] for method, payload in api.calls
              if method == "sendMessage"][-1]
     code = re.search(r"^([0-9a-f]{12}) family=", queue, re.M).group(1)
-    assert "expected=answered" in queue
+    assert f"expected={expected}" in queue
     assert "observed=abstained" in queue
     assert "state=feedback" in queue
     assert delivery["probe_id"] not in queue
     assert str(delivery["chat_id"]) not in queue
 
     api.updates = [update(
-        4, f"/feedback@ProjectNull_bot {code} regression answered "
+        4, f"/feedback@ProjectNull_bot {code} regression {expected} "
            "captured without an old reply")]
     instance.poll_once()
     feedback = store.list("feedback")[0]
@@ -406,6 +408,8 @@ def test_status_reports_run_and_load_boundary(tmp_path):
     assert "run=run_0123456789abcdefabcd" in status
     assert "rate=6/60s" in status and "max_burst=10" in status
     assert "candidate_pile=0" in status
+    assert "curriculum=reviewed-v1" in status
+    assert "tiers=foundation:10,contextual:0,adversarial:0" in status
 
 
 def test_status_candidate_pile_survives_restart(tmp_path):

@@ -10,8 +10,10 @@ import tempfile
 from dataclasses import asdict, dataclass
 from typing import Mapping
 
+from .curriculum import derive as derive_curriculum
 from .generator import (
-    CATALOG_VERSION, MAX_BURST, MIXED_POLICY_VERSION, catalog_hash,
+    CATALOG_VERSION, CURRICULUM_VERSION, MAX_BURST, MIXED_POLICY_VERSION,
+    catalog_hash,
 )
 from .disposition import candidate_counts
 from .schema import RAW_RETENTION, SCHEMA_VERSION, parse_utc, utc_now
@@ -92,6 +94,7 @@ class Config:
             "source_revision": self.source_revision,
             "catalog_version": CATALOG_VERSION,
             "catalog_sha256": catalog_hash(),
+            "curriculum_version": CURRICULUM_VERSION,
             "mixed_policy_version": MIXED_POLICY_VERSION,
             "maximum_burst": MAX_BURST,
             "raw_retention_seconds": int(RAW_RETENTION.total_seconds()),
@@ -139,7 +142,8 @@ def write_audit(store: Store, config: Config, run_id: str,
     state = {"schema_version": SCHEMA_VERSION, "run_id": run_id,
              "record_counts": store.counts(),
              "paused": store.control("paused", "true") == "true",
-             "mode": store.control("mode", "mixed")}
+             "mode": store.control("mode", "mixed"),
+             "curriculum": derive_curriculum(store).public()}
     state_sha256 = hashlib.sha256(_bytes(state)).hexdigest()
     if store.control(_AUDIT_STATE_CONTROL) == state_sha256:
         return None
@@ -192,6 +196,7 @@ def health_report(store: Store, api, config: Config) -> dict:
     webhook = api.call("getWebhookInfo")
     peer_evidence = peer_reply_evidence(store)
     candidates = candidate_counts(store)
+    curriculum = derive_curriculum(store)
     return {
         "ok": bool(store.integrity()
                    and isinstance(me.get("id"), int)
@@ -201,6 +206,7 @@ def health_report(store: Store, api, config: Config) -> dict:
         "database": {"integrity": store.integrity(),
                      "checkpoint": store.checkpoint("telegram")},
         "candidates": asdict(candidates),
+        "curriculum": curriculum.public(),
         "telegram": {"username": me.get("username"),
                      "privacy_mode": ("enabled" if
                                       me.get("can_read_all_group_messages") is not True
