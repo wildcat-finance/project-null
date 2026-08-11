@@ -18,10 +18,26 @@ a `failed` outcome with `route=silence`.
 
 ## Human judgement
 
-A reviewer replies to either the Null probe or the correlated Aleph response:
+A reviewer can reply to either the Null probe or the correlated Aleph response:
 
 ```text
 /feedback@<NullBot> <decision> <expected_outcome> [note]
+```
+
+Basic Telegram groups do not provide direct links to old messages. When the
+original response is difficult to find, the reviewer asks Null for its scrubbed
+queue:
+
+```text
+/queue@<NullBot>
+```
+
+Each unresolved record receives a 12-character review code alongside only its
+family, expected outcome, observed outcome, route, and whether it needs feedback
+or finalisation. The reviewer can then work without a reply:
+
+```text
+/feedback@<NullBot> <review_code> <decision> <expected_outcome> [note]
 ```
 
 Decisions are `regression`, `corpus_gap`, `routing_change`,
@@ -34,11 +50,17 @@ and note are raw records with the same exact 30-day expiry as other identifiable
 data. Review changes the proposed expected outcome; it never edits Aleph's
 corpus and never promotes a candidate automatically.
 
-When the latest judgement is correct, the reviewer replies once more with:
+When the latest judgement is correct, the reviewer either replies once more or
+uses the same review code:
 
 ```text
 /finalize@<NullBot>
+/finalize@<NullBot> <review_code>
 ```
+
+The code grants no capability and contains no Telegram identifier. Commands
+remain restricted to allowlisted operators in allowlisted chats. Finalisation
+deletes the raw probe and makes its review code immediately unresolvable.
 
 Finalisation is the explicit promotion boundary. Null creates a redacted,
 non-linkable long-term question and proposal, then deletes the probe, delivery,

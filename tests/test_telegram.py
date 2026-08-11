@@ -1,4 +1,5 @@
 import json
+import re
 
 import pytest
 
@@ -176,6 +177,55 @@ def test_aleph_reply_and_human_feedback_are_correlated(tmp_path):
     assert store.list("export_candidate")[0]["kind"] == "corpus_proposal"
     evidence = json.loads(store.control("peer_reply_evidence"))
     assert evidence == {"count": 1, "last_observed_at": NOW}
+
+
+def test_review_queue_codes_finalize_without_historical_reply(tmp_path):
+    api = FakeAPI([update(1, "/probe@ProjectNull_bot")])
+    instance, store = shell(tmp_path, api)
+    instance.poll_once()
+    delivery = store.list("delivery")[0]
+    api.updates = [bot_reply(
+        2, "I can't produce a supported answer right now.",
+        delivery["message_id"])]
+    instance.poll_once()
+
+    api.updates = [update(3, "/queue@ProjectNull_bot")]
+    instance.poll_once()
+    queue = [payload["text"] for method, payload in api.calls
+             if method == "sendMessage"][-1]
+    code = re.search(r"^([0-9a-f]{12}) family=", queue, re.M).group(1)
+    assert "expected=answered" in queue
+    assert "observed=abstained" in queue
+    assert "state=feedback" in queue
+    assert delivery["probe_id"] not in queue
+    assert str(delivery["chat_id"]) not in queue
+
+    api.updates = [update(
+        4, f"/feedback@ProjectNull_bot {code} regression answered "
+           "captured without an old reply")]
+    instance.poll_once()
+    feedback = store.list("feedback")[0]
+    assert feedback["probe_id"] == delivery["probe_id"]
+    assert feedback["decision"] == "regression"
+    assert feedback["note"] == "captured without an old reply"
+
+    api.updates = [update(5, f"/finalize@ProjectNull_bot {code}")]
+    instance.poll_once()
+    assert store.list("probe") == store.list("delivery") == []
+    assert store.list("aleph_outcome") == store.list("feedback") == []
+    assert len(store.list("export_candidate")) == 1
+
+
+def test_unknown_review_code_fails_closed(tmp_path):
+    api = FakeAPI([update(
+        1, "/feedback@ProjectNull_bot 000000000000 regression answered note")])
+    instance, store = shell(tmp_path, api)
+    instance.poll_once()
+
+    error = [payload["text"] for method, payload in api.calls
+             if method == "sendMessage"][-1]
+    assert error == "review code is unknown or already finalized"
+    assert store.list("feedback") == []
 
 
 def test_aleph_latency_uses_the_same_local_clock_as_delivery(tmp_path):
