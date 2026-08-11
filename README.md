@@ -193,3 +193,8 @@ Bot-to-Bot Communication Mode enabled for Null, and Null's numeric ID authorized
 through Aleph's default-closed peer allowlist. It is persistent but deliberately
 paused between controlled batches. `OPERATIONS.md` records the passed rehearsal
 and the remaining rollout sequence.
+
+## License
+
+Project Null is licensed under the [Apache License 2.0](LICENSE).
+Copyright 2026 Wildcat Labs.
