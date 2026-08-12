@@ -61,6 +61,9 @@ explicit `@<NullBot>` form:
 - `/status@<NullBot>` — show the current run, mode, rate limit, checkpoint,
   unresolved reviews, unresolved finalised-candidate pile, and downstream
   resolved count, plus the active Aleph coverage identity when configured.
+- `/ping@<NullBot>` — return `Pong!` plus process uptime, generation state,
+  run/generator/source identities, current coverage and curriculum pins, and
+  scrubbed queue counts without generating a probe.
 
 Null must be rate-limited, visibly identifiable, and unable to respond recursively to its own output or another bot's output. Group delivery should use explicit bot commands and replies rather than relying on plain `@mentions`, which Telegram privacy mode does not reliably deliver to bots.
 
