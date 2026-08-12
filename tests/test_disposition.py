@@ -201,6 +201,12 @@ def test_modified_export_and_wrong_identity_fail_before_database_write(tmp_path)
         apply(store, str(tmp_path / "artifacts"), str(path))
     assert store.list("candidate_disposition") == []
 
+    value["export_id"] = "0" * 20
+    with pytest.raises(DispositionError, match="cannot read"):
+        apply(store, str(tmp_path / "artifacts"),
+              str(write_report(tmp_path, value, "wrong-export.json")))
+    assert store.list("candidate_disposition") == []
+
 
 def test_version_two_report_resolves_regression_and_corpus_candidates(tmp_path):
     store = Store(str(tmp_path / "null.db"))
@@ -235,8 +241,23 @@ def test_version_one_report_fails_closed_for_mixed_export(tmp_path):
               str(write_report(tmp_path, value)))
     assert store.list("candidate_disposition") == []
 
-    value["export_id"] = "0" * 20
-    with pytest.raises(DispositionError, match="cannot read"):
+
+def test_version_two_changed_kind_and_missing_evidence_fail_closed(tmp_path):
+    store = Store(str(tmp_path / "null.db"))
+    candidates = [retained(1, "Regression?"), retained_corpus(2, "Corpus?")]
+    store.append_many(candidates)
+    export = publish(store, str(tmp_path / "artifacts"))
+    original = mixed_report(candidates, export.name, ("accepted", "accepted"))
+
+    changed_kind = json.loads(json.dumps(original))
+    changed_kind["cases"][1]["kind"] = "regression"
+    with pytest.raises(DispositionError, match="changed candidate kind"):
         apply(store, str(tmp_path / "artifacts"),
-              str(write_report(tmp_path, value, "wrong-export.json")))
+              str(write_report(tmp_path, changed_kind, "changed-kind.json")))
+
+    missing_evidence = json.loads(json.dumps(original))
+    missing_evidence["cases"][1]["reference"] = None
+    with pytest.raises(DispositionError, match="evidence reference"):
+        apply(store, str(tmp_path / "artifacts"),
+              str(write_report(tmp_path, missing_evidence, "missing-evidence.json")))
     assert store.list("candidate_disposition") == []
