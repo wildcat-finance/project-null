@@ -28,6 +28,21 @@ def retained(index: int, question: str) -> ExportCandidate:
     )
 
 
+def retained_corpus(index: int, question: str) -> ExportCandidate:
+    question_id = stable_id("question", {"index": index})
+    return ExportCandidate(
+        candidate_id=stable_id("candidate", {"index": index}),
+        question_id=question_id,
+        kind=ExportKind.CORPUS_PROPOSAL,
+        question=question,
+        expected_outcome=OutcomeKind.ANSWERED,
+        rationale="Reviewed corpus gap.",
+        provenance=Provenance.SYNTHETIC,
+        evidence_targets=(),
+        created_at="2026-08-11T00:00:00Z",
+    )
+
+
 def setup(tmp_path):
     store = Store(str(tmp_path / "null.db"))
     candidates = [
@@ -63,6 +78,35 @@ def report(candidates, export_id, statuses=None):
         "counts": counts,
         "export_id": export_id,
         "ready": counts["needs_review"] == 0,
+    }
+
+
+def mixed_report(candidates, export_id, statuses):
+    cases = []
+    for index, (candidate, status) in enumerate(zip(candidates, statuses), 1):
+        regression = candidate.kind == ExportKind.REGRESSION
+        cases.append({
+            "candidate_id": candidate.candidate_id,
+            "expected": "corpus",
+            "golden_id": f"q{index:02d}" if regression and status in (
+                "accepted", "duplicate") else None,
+            "kind": candidate.kind.value,
+            "question": candidate.question,
+            "reference": (
+                "wildcat-docs@aleph-v0.5" if not regression and status in (
+                    "accepted", "duplicate") else None),
+            "status": status,
+        })
+    names = ("accepted", "deferred", "duplicate", "needs_review", "rejected")
+    counts = {name: statuses.count(name) for name in names}
+    return {
+        "candidate_count": len(candidates),
+        "cases": cases,
+        "counts": counts,
+        "evolution": "mixed-candidate-dispositions-v2",
+        "export_id": export_id,
+        "ready": counts["needs_review"] == 0,
+        "schema_version": 2,
     }
 
 
@@ -161,4 +205,59 @@ def test_modified_export_and_wrong_identity_fail_before_database_write(tmp_path)
     with pytest.raises(DispositionError, match="cannot read"):
         apply(store, str(tmp_path / "artifacts"),
               str(write_report(tmp_path, value, "wrong-export.json")))
+    assert store.list("candidate_disposition") == []
+
+
+def test_version_two_report_resolves_regression_and_corpus_candidates(tmp_path):
+    store = Store(str(tmp_path / "null.db"))
+    candidates = [
+        retained(1, "Regression question?"),
+        retained_corpus(2, "Corpus gap question?"),
+    ]
+    store.append_many(candidates)
+    export = publish(store, str(tmp_path / "artifacts"))
+    value = mixed_report(candidates, export.name, ("accepted", "accepted"))
+
+    result = apply(
+        store, str(tmp_path / "artifacts"),
+        str(write_report(tmp_path, value)), "2026-08-11T01:00:00Z")
+
+    assert result.applied == 2
+    assert result.counts.resolved == 2 and result.counts.unresolved == 0
+    records = store.list("candidate_disposition")
+    assert {item["reference"] for item in records} == {
+        "q01", "wildcat-docs@aleph-v0.5"}
+
+
+def test_version_one_report_fails_closed_for_mixed_export(tmp_path):
+    store = Store(str(tmp_path / "null.db"))
+    candidates = [retained(1, "Regression?"), retained_corpus(2, "Corpus?")]
+    store.append_many(candidates)
+    export = publish(store, str(tmp_path / "artifacts"))
+    value = report(candidates, export.name, ("accepted", "accepted"))
+
+    with pytest.raises(DispositionError, match="version 1"):
+        apply(store, str(tmp_path / "artifacts"),
+              str(write_report(tmp_path, value)))
+    assert store.list("candidate_disposition") == []
+
+
+def test_version_two_changed_kind_and_missing_evidence_fail_closed(tmp_path):
+    store = Store(str(tmp_path / "null.db"))
+    candidates = [retained(1, "Regression?"), retained_corpus(2, "Corpus?")]
+    store.append_many(candidates)
+    export = publish(store, str(tmp_path / "artifacts"))
+    original = mixed_report(candidates, export.name, ("accepted", "accepted"))
+
+    changed_kind = json.loads(json.dumps(original))
+    changed_kind["cases"][1]["kind"] = "regression"
+    with pytest.raises(DispositionError, match="changed candidate kind"):
+        apply(store, str(tmp_path / "artifacts"),
+              str(write_report(tmp_path, changed_kind, "changed-kind.json")))
+
+    missing_evidence = json.loads(json.dumps(original))
+    missing_evidence["cases"][1]["reference"] = None
+    with pytest.raises(DispositionError, match="evidence reference"):
+        apply(store, str(tmp_path / "artifacts"),
+              str(write_report(tmp_path, missing_evidence, "missing-evidence.json")))
     assert store.list("candidate_disposition") == []

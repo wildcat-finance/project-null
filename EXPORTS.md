@@ -10,10 +10,12 @@ Every content-addressed export directory contains:
 - `manifest.json` — schema version, candidate IDs, counts, file hashes, and the
   export ID derived from those exact inputs.
 
-The two queues stay separate because a regression test may need no new corpus,
-while a corpus proposal must never be accepted as truth merely because Null or a
-reviewer suggested it. Evidence targets are empty until a reviewer approves
-specific source material.
+The two queues stay separate inside an export because a regression test may need
+no new corpus, while a corpus proposal must never be accepted as truth merely
+because Null or a reviewer suggested it. Evidence targets are empty until a
+reviewer approves specific source material. A version 2 acknowledgement covers
+both queues atomically: accepted regressions name a golden test, while accepted
+corpus proposals name the reviewed evidence or release that closes the gap.
 
 The initial batching rule is to open an Aleph corpus-release review when ten
 human-approved factual proposals have accumulated. This is a review trigger,
@@ -29,3 +31,6 @@ validates that report against its own export and adds separate terminal records
 for accepted, duplicate, and rejected candidates. Deferred and `needs_review`
 cases remain in `candidate_pile`; `/status` reports terminal records separately.
 Neither acknowledgement nor publication edits or deletes candidate/export bytes.
+Version 1 regression-only acknowledgements remain replayable. The first explicit
+Ouroboros evolution is `mixed-candidate-dispositions-v2`; it changes the loop's
+review vocabulary without resetting Aleph's globally monotonic generation.
