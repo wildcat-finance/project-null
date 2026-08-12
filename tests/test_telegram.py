@@ -60,14 +60,17 @@ def bot_reply(update_id, text, reply_to):
     return item
 
 
-def shell(tmp_path, api, clock=lambda: NOW, coverage=None):
+def shell(tmp_path, api, clock=lambda: NOW, coverage=None,
+          runtime_status=None, monotonic_clock=None):
     store = Store(str(tmp_path / "null.db"))
     instance = TelegramShell(
         store, Generator(clock=lambda: NOW), api,
         aleph_username="ProjectAlephWildcat_bot",
         aleph_bot_id=8728174629,
         allowed_chat_ids={-100}, operator_user_ids={7}, clock=clock,
-        coverage=coverage)
+        coverage=coverage, runtime_status=runtime_status,
+        **({"monotonic_clock": monotonic_clock}
+           if monotonic_clock is not None else {}))
     instance.startup()
     return instance, store
 
@@ -569,6 +572,72 @@ def test_status_reports_run_and_load_boundary(tmp_path):
     assert "candidate_pile=0" in status
     assert "curriculum=reviewed-v1" in status
     assert "tiers=foundation:10,contextual:0,adversarial:0" in status
+
+
+def test_ping_reports_liveness_generation_and_current_pins(tmp_path):
+    times = iter([100.0, 104.0])
+    plan = coverage_plan()
+    api = FakeAPI([update(1, "/ping@ProjectNull_bot")])
+    instance, store = shell(
+        tmp_path, api, coverage=plan,
+        runtime_status={
+            "catalog_version": "catalogue-v4",
+            "catalog_sha256": "a" * 64,
+            "mixed_policy_version": "mixed-v3",
+            "source_revision": "deadbeef",
+        }, monotonic_clock=lambda: next(times))
+    store.set_control("run_id", "b" * 20)
+    store.set_control("paused", "false")
+
+    assert instance.poll_once() == 1
+    ping = [payload["text"] for method, payload in api.calls
+            if method == "sendMessage"][-1]
+    assert ping.startswith("Pong!\nAlive: 00h 00m 04s")
+    assert "Generation: running; mode=mixed" in ping
+    assert f"Run: {'b' * 20}" in ping
+    assert "Generator: catalogue-v4" in ping
+    assert f"Coverage: {plan.silhouette_id}/{plan.release_id}" in ping
+    assert "Review: unreviewed=0; candidate_pile=0; candidate_resolved=0" in ping
+    assert "Source: deadbeef" in ping
+    assert store.list("probe") == []
+
+
+def test_ping_addressing_and_restart_uptime(tmp_path):
+    ignored_api = FakeAPI([update(1, "/ping@AnotherBot")])
+    ignored, ignored_store = shell(tmp_path / "ignored", ignored_api)
+    assert ignored.poll_once() == 1
+    assert not [payload for method, payload in ignored_api.calls
+                if method == "sendMessage"]
+    ignored_store.close()
+
+    member_api = FakeAPI([update(1, "/ping@ProjectNull_bot", user=99)])
+    member, member_store = shell(tmp_path / "member", member_api)
+    member.poll_once()
+    assert [payload["text"] for method, payload in member_api.calls
+            if method == "sendMessage"][-1].startswith("Pong!")
+    member_store.close()
+
+    first_times = iter([10.0, 15.0])
+    first_api = FakeAPI([update(1, "/ping@ProjectNull_bot")])
+    first, first_store = shell(
+        tmp_path / "restart", first_api,
+        monotonic_clock=lambda: next(first_times))
+    first.poll_once()
+    first_ping = [payload["text"] for method, payload in first_api.calls
+                  if method == "sendMessage"][-1]
+    assert "Alive: 00h 00m 05s" in first_ping
+    first_store.close()
+
+    second_times = iter([100.0, 101.0])
+    second_api = FakeAPI([update(2, "/ping@ProjectNull_bot")])
+    second, second_store = shell(
+        tmp_path / "restart", second_api,
+        monotonic_clock=lambda: next(second_times))
+    second.poll_once()
+    second_ping = [payload["text"] for method, payload in second_api.calls
+                   if method == "sendMessage"][-1]
+    assert "Alive: 00h 00m 01s" in second_ping
+    second_store.close()
 
 
 def test_status_candidate_pile_survives_restart(tmp_path):

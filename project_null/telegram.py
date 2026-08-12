@@ -34,6 +34,16 @@ class TelegramTimeout(TelegramError):
     """Telegram transport timed out before returning a Bot API response."""
 
 
+def _uptime(seconds: float) -> str:
+    total = max(0, int(seconds))
+    days, remainder = divmod(total, 86_400)
+    hours, remainder = divmod(remainder, 3_600)
+    minutes, secs = divmod(remainder, 60)
+    if days:
+        return f"{days}d {hours:02d}h {minutes:02d}m {secs:02d}s"
+    return f"{hours:02d}h {minutes:02d}m {secs:02d}s"
+
+
 class BotAPI(Protocol):
     def call(self, method: str, payload: dict | None = None): ...
 
@@ -107,7 +117,9 @@ class TelegramShell:
                  allowed_chat_ids: set[int],
                  operator_user_ids: set[int], clock: Callable[[], str] = utc_now,
                  limiter: RateLimiter | None = None, poll_timeout: int = 30,
-                 coverage: CoveragePlan | None = None):
+                 coverage: CoveragePlan | None = None,
+                 runtime_status: dict[str, object] | None = None,
+                 monotonic_clock: Callable[[], float] = time.monotonic):
         if not re.fullmatch(r"[A-Za-z0-9_]{5,32}", aleph_username):
             raise TelegramError("aleph_username is invalid")
         if (isinstance(aleph_bot_id, bool) or not isinstance(aleph_bot_id, int)
@@ -132,6 +144,9 @@ class TelegramShell:
         self.limiter = limiter or RateLimiter()
         self.poll_timeout = poll_timeout
         self.coverage = coverage
+        self.runtime_status = dict(runtime_status or {})
+        self.monotonic_clock = monotonic_clock
+        self.started_monotonic = monotonic_clock()
         self.capture = OutcomeCapture(store, clock)
         self.identity: Identity | None = None
 
@@ -206,8 +221,6 @@ class TelegramShell:
         if sender.get("is_bot") is True:
             self._observe_aleph(chat_id, sender, message)
             return
-        if user_id not in self.operator_user_ids:
-            return
         text = message.get("text")
         message_id = message.get("message_id")
         if not isinstance(text, str) or not isinstance(message_id, int):
@@ -222,6 +235,11 @@ class TelegramShell:
             return
         command = command.casefold()
         argument = (argument or "").strip()
+        if command == "ping":
+            self._ping(chat_id, message_id)
+            return
+        if user_id not in self.operator_user_ids:
+            return
         if command in {"probe", "burst"} and not self.limiter.allow(
                 (chat_id, user_id)):
             self._reply(chat_id, message_id, "Rate limit reached; try again shortly.")
@@ -551,6 +569,38 @@ class TelegramShell:
             f"curriculum={curriculum['version']}; tiers={tier_counts}; "
             f"coverage={coverage}; "
             f"checkpoint={self.store.checkpoint('telegram')}.")
+
+    def _ping(self, chat_id: int, message_id: int) -> None:
+        paused = self.store.control("paused", "false") == "true"
+        unresolved = sum(
+            not self.store.list("feedback", probe_id=item["probe_id"])
+            for item in self.store.list("probe"))
+        candidates = candidate_counts(self.store)
+        curriculum = derive_curriculum(self.store).public()
+        coverage = (f"{self.coverage.silhouette_id}/"
+                    f"{self.coverage.release_id}"
+                    if self.coverage is not None else "disabled")
+        status = self.runtime_status
+        lines = [
+            "Pong!",
+            f"Alive: {_uptime(self.monotonic_clock() - self.started_monotonic)}",
+            f"Generation: {'paused' if paused else 'running'}; "
+            f"mode={self.store.control('mode', 'mixed')}",
+            f"Run: {self.store.control('run_id', 'not-started')}",
+            f"Generator: {status.get('catalog_version', 'unknown')}; "
+            f"catalog={status.get('catalog_sha256', 'unknown')}; "
+            f"policy={status.get('mixed_policy_version', 'unknown')}",
+            f"Curriculum: {curriculum['version']}",
+            f"Coverage: {coverage}",
+            f"Review: unreviewed={unresolved}; "
+            f"candidate_pile={candidates.unresolved}; "
+            f"candidate_resolved={candidates.resolved}",
+            f"Checkpoint: {self.store.checkpoint('telegram')}",
+        ]
+        source_revision = status.get("source_revision")
+        if source_revision:
+            lines.append(f"Source: {source_revision}")
+        self._reply(chat_id, message_id, "\n".join(lines))
 
     def _generate(self, update_id: int, chat_id: int,
                   command_message_id: int, count: int) -> None:

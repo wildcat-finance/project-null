@@ -32,6 +32,12 @@ Null's capability: Aleph accepts only the explicit command form above.
   durable finalised-candidate pile, curriculum version, and scrubbed family-tier
   counts. When coverage guidance is configured it also reports the exact
   silhouette/release pair and target count, never target question text.
+- `/ping@<NullBot>` is a read-only liveness poll. It replies with `Pong!`,
+  monotonic process uptime, running/paused generation state, immutable run and
+  generator identities, source revision, curriculum and coverage pins,
+  Telegram checkpoint, and scrubbed review/candidate counts. It does not
+  generate a probe, consume the generation rate limit, read raw question text,
+  or expose operator and chat identifiers.
 - `/queue@<NullBot>` reports unresolved records with short review codes and no
   question text or Telegram identifiers.
 - `/feedback@<NullBot> [review_code] <decision> <expected_outcome> [note]`
