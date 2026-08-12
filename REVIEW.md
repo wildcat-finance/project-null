@@ -3,6 +3,9 @@
 Null treats Telegram as the end-to-end boundary. It does not import Aleph's
 router, call its answer engine, or grade hidden state.
 
+Review always judges the Aleph identity stamped on the probe. A result from one
+`evolution N/generation M` is never silently attributed to another pair.
+
 An Aleph message is correlated only when all of the following hold:
 
 - it arrives in an allowlisted chat;
@@ -139,3 +142,7 @@ the counter never implies automatic Aleph ingestion. A complete report from
 Aleph may resolve accepted, duplicate, and rejected candidates by adding
 separate terminal disposition records. Deferred and `needs_review` candidates
 remain in the pile.
+
+Version 2 reports also name the Aleph evolution/generation that acknowledged
+the pile. Null rejects a report aimed at a different active pair before adding
+any disposition.

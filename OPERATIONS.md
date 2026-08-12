@@ -11,7 +11,7 @@ restart preserved every record count and produced no duplicate delivery.
 
 ## Per-deployment external inputs
 
-Each new deployment requires these six external values:
+Each new deployment requires these eight external values:
 
 1. a separate Telegram Bot API token in `NULL_TELEGRAM_TOKEN`;
 2. the private developer-group chat ID;
@@ -21,6 +21,8 @@ Each new deployment requires these six external values:
    generated live and historical probes; and
 6. `NULL_PROBE_ACCOUNT_ADDRESS`, one non-zero public account used only by
    account-scoped probes.
+7. `NULL_ALEPH_EVOLUTION`, the active Aleph evolution number; and
+8. `NULL_ALEPH_GENERATION`, the active generation within that evolution.
 
 Both probe addresses are validated before the database or Telegram connection
 opens. They remain in the 30-day raw review boundary and never appear in public
@@ -36,8 +38,10 @@ Coverage-guided generation adds two optional, paired inputs:
 - `NULL_ALEPH_COVERAGE_RELEASE`, the exact active Aleph release ID it must
   describe.
 
-Set neither to keep catalogue-only generation. Setting only one is a startup
-failure. Null validates the content address, release binding, count
+Set neither to keep catalogue-only generation. The evolution/generation pair is
+still mandatory because ordinary catalogue probes also need provenance. Setting
+only one coverage input is a startup failure. Null validates the content address,
+release and evolution/generation binding, count
 reconciliation, and exclusion boundary before opening the database or Telegram
 connection. A stale silhouette therefore cannot silently guide a newer Aleph
 release.
@@ -77,7 +81,8 @@ addressed `/resume@<NullBot>` command can enable probe generation.
 8. Add Null and Aleph to the private group and enable Bot-to-Bot Communication
    Mode for Null.
 9. Start the service and confirm `/status@<NullBot>` reports paused and either
-   the exact silhouette/release pair or `coverage=disabled`.
+   the exact `evolution N/generation M`, silhouette/release pair or
+   `coverage=disabled`.
 10. Send `/mode@<NullBot> ordinary`, then `/resume@<NullBot>`, then one
    `/probe@<NullBot>`.
 11. Confirm Aleph directly replies, Null records one outcome, and no loop occurs.
@@ -146,7 +151,8 @@ sudo systemctl start project-null-disposition.service
 sudo journalctl -u project-null-disposition.service --since today --no-pager
 ```
 
-The command rejects a wrong export ID, modified export bytes, missing or extra
+The command rejects a wrong Aleph evolution/generation, export ID, modified
+export bytes, missing or extra
 candidates, inconsistent counts, changed question text, and conflicting
 terminal replays before committing anything. An identical replay is idempotent.
 Accepted, duplicate, and rejected cases become resolved; deferred and

@@ -31,6 +31,10 @@ validates that report against its own export and adds separate terminal records
 for accepted, duplicate, and rejected candidates. Deferred and `needs_review`
 cases remain in `candidate_pile`; `/status` reports terminal records separately.
 Neither acknowledgement nor publication edits or deletes candidate/export bytes.
-Version 1 regression-only acknowledgements remain replayable. The first explicit
-Ouroboros evolution is `mixed-candidate-dispositions-v2`; it changes the loop's
-review vocabulary without resetting Aleph's globally monotonic generation.
+Version 1 regression-only acknowledgements remain replayable. The current
+explicit Ouroboros evolution is evolution 2,
+`mixed-candidate-dispositions-v2`; it changes the loop's review vocabulary.
+Generation starts at 1 inside each evolution. The separate Aleph
+`activation_sequence` remains globally monotonic but is not part of Null's
+human-facing identity. New candidates retain the exact evolution/generation
+they tested; legacy immutable candidates remain unchanged.

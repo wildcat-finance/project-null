@@ -15,10 +15,13 @@ RELEASE = "1" * 20
 
 def silhouette():
     value = {
-        "schema_version": 1,
+        "schema_version": 2,
         "silhouette_id": "",
         "created": NOW,
         "binding": {
+            "evolution": 2,
+            "generation": 1,
+            "evolution_contract": "mixed-candidate-dispositions-v2",
             "release_id": RELEASE,
             "release_sha256": "2" * 64,
             "manifest_sha256": "3" * 64,
@@ -127,7 +130,8 @@ def test_release_identity_is_an_explicit_startup_boundary(tmp_path):
 
 def test_mixed_bursts_insert_deterministic_coverage_slots(tmp_path):
     plan = load(str(write(tmp_path)), RELEASE)
-    generator = Generator(clock=lambda: NOW)
+    generator = Generator(clock=lambda: NOW, aleph_identity={
+        "evolution": plan.evolution, "generation": plan.generation})
     left = generator.burst(seed=77, count=6, coverage=plan)
     right = generator.burst(seed=77, count=6, coverage=plan)
 
@@ -153,7 +157,9 @@ def test_configured_context_reaches_coverage_guided_slots(tmp_path):
         "account_address": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     }
     generated = Generator(
-        clock=lambda: NOW, variables=variables).burst(
+        clock=lambda: NOW, variables=variables, aleph_identity={
+            "evolution": plan.evolution,
+            "generation": plan.generation}).burst(
             seed=77, count=6, coverage=plan)
     coverage = [item for item in generated
                 if item.probe.generator["kind"] == "coverage_challenge"]
@@ -166,7 +172,8 @@ def test_configured_context_reaches_coverage_guided_slots(tmp_path):
 
 def test_review_tier_is_bound_to_coverage_probe_identity(tmp_path):
     plan = load(str(write(tmp_path)), RELEASE)
-    generator = Generator(clock=lambda: NOW)
+    generator = Generator(clock=lambda: NOW, aleph_identity={
+        "evolution": plan.evolution, "generation": plan.generation})
     foundation = generator.burst(seed=78, count=3, coverage=plan)[2]
     adversarial = generator.burst(
         seed=78, count=3, coverage=plan,
@@ -181,7 +188,8 @@ def test_review_tier_is_bound_to_coverage_probe_identity(tmp_path):
 
 def test_missing_coverage_and_explicit_family_keep_catalogue_behavior(tmp_path):
     plan = load(str(write(tmp_path)), RELEASE)
-    generator = Generator(clock=lambda: NOW)
+    generator = Generator(clock=lambda: NOW, aleph_identity={
+        "evolution": plan.evolution, "generation": plan.generation})
     ordinary = generator.burst(seed=88, count=6)
     explicit = generator.burst(
         seed=88, count=6, family=ScenarioFamily.NOVICE, coverage=plan)
@@ -195,7 +203,8 @@ def test_missing_coverage_and_explicit_family_keep_catalogue_behavior(tmp_path):
 def test_scrubbed_exposure_prevents_repeat_after_raw_deletion(tmp_path):
     plan = load(str(write(tmp_path)), RELEASE)
     store = Store(str(tmp_path / "null.db"))
-    generator = Generator(clock=lambda: NOW)
+    generator = Generator(clock=lambda: NOW, aleph_identity={
+        "evolution": plan.evolution, "generation": plan.generation})
     first = generator.burst(seed=90, count=3, coverage=plan)[2]
     store.append_many([first.scenario, first.probe])
     remember_exposure(store, first)

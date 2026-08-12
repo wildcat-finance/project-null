@@ -20,7 +20,10 @@ def main() -> int:
         config = Config.from_env()
         store = Store(config.db_path)
         try:
-            result = apply(store, config.artifacts_path, args.report)
+            result = apply(
+                store, config.artifacts_path, args.report,
+                expected_evolution=config.aleph_evolution,
+                expected_generation=config.aleph_generation)
         finally:
             store.close()
     except (DispositionError, OperationsError) as error:
