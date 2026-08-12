@@ -5,6 +5,7 @@ import pytest
 
 from project_null.coverage import CoveragePlan, CoverageTarget
 from project_null.generator import Generator
+from project_null.operations import local_model_observations
 from project_null.schema import (
     CandidateDisposition, CandidateResolution, OutcomeKind, ScenarioFamily,
     stable_id,
@@ -61,7 +62,7 @@ def bot_reply(update_id, text, reply_to):
 
 
 def shell(tmp_path, api, clock=lambda: NOW, coverage=None,
-          runtime_status=None, monotonic_clock=None):
+          runtime_status=None, monotonic_clock=None, paraphraser=None):
     store = Store(str(tmp_path / "null.db"))
     instance = TelegramShell(
         store, Generator(
@@ -76,6 +77,7 @@ def shell(tmp_path, api, clock=lambda: NOW, coverage=None,
             "aleph_identity_label": (
                 f"evolution {coverage.evolution}/generation {coverage.generation}"
                 if coverage is not None else "evolution 1/generation 1")}),
+        paraphraser=paraphraser,
         **({"monotonic_clock": monotonic_clock}
            if monotonic_clock is not None else {}))
     instance.startup()
@@ -115,6 +117,24 @@ def test_probe_is_addressed_to_aleph_and_checkpointed(tmp_path):
     assert probe_sends[0]["text"].startswith("/ask@ProjectAlephWildcat_bot ")
     assert len(store.list("probe")) == len(store.list("delivery")) == 1
     assert store.checkpoint("telegram") == 2
+
+def test_shadow_output_is_discarded_and_only_diagnostics_persist(tmp_path):
+    class Shadow:
+        def observe(self, question, **kwargs):
+            from project_null.local_model import ShadowObservation
+            return ShadowObservation("shadow", "valid", (), "gpt-oss:120b",
+                                     "a951a23b46a1", latency_ms=12)
+    api = FakeAPI([update(1, "/probe@ProjectNull_bot")])
+    instance, store = shell(tmp_path, api, paraphraser=Shadow())
+    instance.poll_once()
+    probe = store.list("probe")[0]
+    sent = next(p["text"] for m, p in api.calls
+                if m == "sendMessage" and p["text"].startswith("/ask@"))
+    assert sent.endswith(probe["text"])
+    assert probe["generator"]["local_model"]["status"] == "valid"
+    assert "candidate" not in json.dumps(probe["generator"]["local_model"])
+    assert local_model_observations(store) == {
+        "total": 1, "valid": 1, "rejected": 0, "fallback": 0}
 
 
 def test_status_and_mixed_burst_expose_only_coverage_identity_and_counts(tmp_path):

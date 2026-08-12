@@ -7,7 +7,7 @@ from project_null.generator import (
     CURRICULUM_VERSION, Generator, MIXED_POLICY_VERSION,
 )
 from project_null.operations import (
-    Config, OperationsError, health_report, publish_run,
+    Config, OperationsError, health_report, local_model_observations, publish_run,
     record_peer_reply_evidence, write_audit,
 )
 from project_null.store import Store
@@ -85,6 +85,25 @@ def test_public_configuration_and_run_hide_identity_and_token(tmp_path):
     assert publish_run(
         config, "2026-08-11T00:00:00Z", coverage) == record
 
+def test_shadow_model_configuration_is_pinned_and_scrubbed(tmp_path):
+    env = environment(tmp_path)
+    env.update({"NULL_LOCAL_MODEL_MODE": "shadow",
+        "NULL_LOCAL_MODEL_URL": "http://127.0.0.1:11435",
+        "NULL_LOCAL_MODEL": "gpt-oss:120b", "NULL_LOCAL_MODEL_ID": "a951a23b46a1"})
+    config = Config.from_env(env)
+    public = config.public()["local_model"]
+    assert public["mode"] == "shadow" and public["id"] == "a951a23b46a1"
+    assert public["reasoning_mode"] == "low-final-only"
+    assert "11435" not in json.dumps(public)
+
+def test_disabled_model_configuration_is_fail_closed(tmp_path):
+    env = environment(tmp_path); env["NULL_LOCAL_MODEL_MODE"] = "shadow"
+    with pytest.raises(OperationsError, match="requires URL"):
+        Config.from_env(env)
+    env = environment(tmp_path); env["NULL_LOCAL_MODEL"] = "gpt-oss:120b"
+    with pytest.raises(OperationsError, match="must not configure"):
+        Config.from_env(env)
+
 
 def test_config_requires_explicit_allowlists(tmp_path):
     with pytest.raises(OperationsError, match="non-empty"):
@@ -149,6 +168,8 @@ def test_health_and_audit_are_scrubbed(tmp_path):
     assert report["candidates"] == {
         "total": 0, "resolved": 0, "unresolved": 0}
     assert report["curriculum"]["version"] == CURRICULUM_VERSION
+    assert report["local_model"]["observations"] == {
+        "total": 0, "valid": 0, "rejected": 0, "fallback": 0}
     assert report["coverage"]["silhouette_id"] == "a" * 20
     assert "Which governance" not in json.dumps(report)
     assert report["telegram"]["bot_to_bot_mode"] == "not_exposed_by_bot_api"
@@ -160,6 +181,12 @@ def test_health_and_audit_are_scrubbed(tmp_path):
     assert "987654321" not in data and "must-never-appear" not in data
     assert "Which governance" not in data
     assert path.stat().st_mode & 0o777 == 0o600
+
+
+def test_local_model_observations_are_empty_without_shadow_probes(tmp_path):
+    store = Store(str(tmp_path / "null.db"))
+    assert local_model_observations(store) == {
+        "total": 0, "valid": 0, "rejected": 0, "fallback": 0}
 
 
 def test_health_fails_when_loaded_coverage_differs_from_configured_release(
