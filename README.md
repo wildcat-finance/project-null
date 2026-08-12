@@ -4,6 +4,12 @@ Project Null is the Bizarro counterpart to [Project Aleph](https://github.com/wi
 
 Its job is to continuously invent plausible, awkward, ambiguous, irrelevant, and adversarial Wildcat-shaped questions, send them through the same surface real users use, and turn the resulting failures into a stronger Aleph corpus and evaluation set.
 
+Every run targets one explicit Aleph identity, written **evolution N/generation
+M**. Evolution changes Aleph and Null's shared interpretation contract;
+generation counts activations within that evolution. Null refuses to start with
+an absent or mismatched pair and stamps it onto every new probe and retained
+candidate.
+
 “Hallucinate” here means generating questions and scenarios. Null must not present invented protocol facts, positions, transactions, or people as real.
 
 ## Why it exists
@@ -67,7 +73,8 @@ explicit `@<NullBot>` form:
 - `/status@<NullBot>` — show the current run, mode, rate limit, checkpoint,
   unresolved reviews, unresolved finalised-candidate pile, and downstream
   resolved count, plus the active Aleph coverage identity when configured.
-- `/ping@<NullBot>` — return `Pong!` plus process uptime, generation state,
+- `/ping@<NullBot>` — return `Pong!` plus process uptime, loop state, the active
+  Aleph `evolution N/generation M`,
   run/generator/source identities, current coverage and curriculum pins, and
   scrubbed queue counts without generating a probe.
 
@@ -130,7 +137,7 @@ version.
 Null can consume Aleph's answer-free coverage silhouette to look for neglected
 topics and route boundaries without seeing Aleph's questions, answers, corpus
 text, citations, or human identities. The artifact is content-addressed and
-must match an explicitly configured active Aleph release. Null rejects changed
+must match an explicitly configured active Aleph evolution/generation and release. Null rejects changed
 hashes, inconsistent counts, leaked content fields, addresses, URLs, or a
 boundary that permits factual grading or autonomous corpus writes.
 
@@ -142,7 +149,8 @@ Single-family mode remains catalogue-only so a reviewer can rehearse one family
 without the coverage scheduler intervening. If no silhouette is configured,
 generation is the ordinary novelty curriculum.
 
-Each coverage-guided probe records the silhouette, release, evaluation, topic,
+Every probe records the active Aleph evolution/generation. Each coverage-guided
+probe additionally records the silhouette, release, evaluation, topic,
 and target kind in raw generator provenance. Long-term exposure memory retains
 only the target ID and silhouette file hash, not the rendered question. Human
 review remains the only path from a result to a regression or factual proposal.

@@ -555,8 +555,11 @@ class TelegramShell:
             for tier, count in curriculum["tier_counts"].items())
         coverage = (f"{self.coverage.silhouette_id}/"
                     f"{self.coverage.release_id}; "
+                    f"evolution {self.coverage.evolution}/generation "
+                    f"{self.coverage.generation}; "
                     f"coverage_targets={len(self.coverage.targets)}"
                     if self.coverage is not None else "disabled")
+        identity = self.runtime_status.get("aleph_identity_label", "unknown")
         self._reply(
             chat_id, message_id,
             f"Null is {'paused' if paused else 'running'}; "
@@ -567,7 +570,7 @@ class TelegramShell:
             f"candidate_pile={candidates.unresolved}; "
             f"candidate_resolved={candidates.resolved}; "
             f"curriculum={curriculum['version']}; tiers={tier_counts}; "
-            f"coverage={coverage}; "
+            f"aleph={identity}; coverage={coverage}; "
             f"checkpoint={self.store.checkpoint('telegram')}.")
 
     def _ping(self, chat_id: int, message_id: int) -> None:
@@ -578,14 +581,17 @@ class TelegramShell:
         candidates = candidate_counts(self.store)
         curriculum = derive_curriculum(self.store).public()
         coverage = (f"{self.coverage.silhouette_id}/"
-                    f"{self.coverage.release_id}"
+                    f"{self.coverage.release_id}; evolution "
+                    f"{self.coverage.evolution}/generation "
+                    f"{self.coverage.generation}"
                     if self.coverage is not None else "disabled")
         status = self.runtime_status
         lines = [
             "Pong!",
             f"Alive: {_uptime(self.monotonic_clock() - self.started_monotonic)}",
-            f"Generation: {'paused' if paused else 'running'}; "
+            f"Loop: {'paused' if paused else 'running'}; "
             f"mode={self.store.control('mode', 'mixed')}",
+            f"Aleph: {status.get('aleph_identity_label', 'unknown')}",
             f"Run: {self.store.control('run_id', 'not-started')}",
             f"Generator: {status.get('catalog_version', 'unknown')}; "
             f"catalog={status.get('catalog_sha256', 'unknown')}; "

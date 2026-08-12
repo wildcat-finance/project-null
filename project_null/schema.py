@@ -118,6 +118,18 @@ def _raw_window(created_at: str, expires_at: str) -> None:
         raise SchemaError("raw expiry must be exactly 30 days after creation")
 
 
+def _aleph_identity(value: Mapping[str, int] | None) -> None:
+    if value is None:
+        return
+    if (not isinstance(value, Mapping)
+            or set(value) != {"evolution", "generation"}
+            or any(isinstance(value.get(key), bool)
+                   or not isinstance(value.get(key), int)
+                   or value[key] < 1
+                   for key in ("evolution", "generation"))):
+        raise SchemaError("Aleph identity must be evolution N/generation M")
+
+
 @dataclass(frozen=True)
 class Scenario:
     record_type: ClassVar[str] = "scenario"
@@ -256,6 +268,7 @@ class AnonymizedQuestion:
     decision: ReviewDecision
     source_date: str
     anonymized_at: str
+    aleph_identity: Mapping[str, int] | None = None
 
     def __post_init__(self) -> None:
         _identifier(self.question_id, "question_id")
@@ -271,6 +284,7 @@ class AnonymizedQuestion:
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", self.source_date):
             raise SchemaError("source_date must be YYYY-MM-DD")
         parse_utc(self.anonymized_at)
+        _aleph_identity(self.aleph_identity)
 
 
 @dataclass(frozen=True)
@@ -310,6 +324,7 @@ class ExportCandidate:
     provenance: Provenance
     evidence_targets: tuple[str, ...]
     created_at: str
+    aleph_identity: Mapping[str, int] | None = None
 
     def __post_init__(self) -> None:
         _identifier(self.candidate_id, "candidate_id")
@@ -323,6 +338,7 @@ class ExportCandidate:
         if not isinstance(self.provenance, Provenance):
             raise SchemaError("provenance must be declared")
         parse_utc(self.created_at)
+        _aleph_identity(self.aleph_identity)
 
 
 @dataclass(frozen=True)
@@ -369,6 +385,10 @@ def to_dict(record: Record) -> dict[str, Any]:
 
     payload = {key: convert(value)
                for key, value in dataclasses.asdict(record).items()}
+    # Preserve byte compatibility for immutable legacy records while adding
+    # explicit provenance to every candidate created under the new contract.
+    if payload.get("aleph_identity") is None:
+        payload.pop("aleph_identity", None)
     result = {"schema_version": SCHEMA_VERSION,
               "record_type": record.record_type, **payload}
     if record.record_type in (

@@ -229,12 +229,22 @@ class Generated:
 
 class Generator:
     def __init__(self, clock: Callable[[], str] = utc_now,
-                 variables: dict[str, str] | None = None):
+                 variables: dict[str, str] | None = None,
+                 aleph_identity: dict[str, int] | None = None):
         self.clock = clock
         # The deterministic fixture values remain useful for isolated tests.
         # Production always supplies Config.probe_variables(), whose values are
         # validated before Telegram or the state store is opened.
         self.variables = dict(DEFAULT_VARIABLES if variables is None else variables)
+        self.aleph_identity = dict(
+            {"evolution": 1, "generation": 1}
+            if aleph_identity is None else aleph_identity)
+        if (set(self.aleph_identity) != {"evolution", "generation"}
+                or any(isinstance(self.aleph_identity.get(key), bool)
+                       or not isinstance(self.aleph_identity.get(key), int)
+                       or self.aleph_identity[key] < 1
+                       for key in ("evolution", "generation"))):
+            raise ValueError("Aleph identity must be evolution N/generation M")
 
     def generate(self, *, seed: int, index: int = 0,
                  family: ScenarioFamily | None = None,
@@ -256,7 +266,8 @@ class Generator:
         basis = {"run_id": run_id, "seed": seed, "index": index,
                  "family": selected.value,
                  "challenge": challenge.challenge_id,
-                 "catalog": catalog_hash()}
+                 "catalog": catalog_hash(),
+                 "aleph_identity": self.aleph_identity}
         scenario_id = stable_id("scenario", basis)
         probe_id = stable_id("probe", {**basis, "text": text})
         scenario = Scenario(
@@ -273,6 +284,10 @@ class Generator:
             generator={"kind": "challenge", "version": CATALOG_VERSION,
                        "catalog_sha256": catalog_hash(), "seed": seed,
                        "index": index,
+                       "aleph_identity": self.aleph_identity,
+                       "aleph_identity_label": (
+                           f"evolution {self.aleph_identity['evolution']}/"
+                           f"generation {self.aleph_identity['generation']}"),
                        "challenge_id": challenge.challenge_id,
                        "tier": challenge.tier.value,
                        "selection": ("explicit_family" if family is not None
@@ -284,6 +299,10 @@ class Generator:
                            plan: CoveragePlan, target: CoverageTarget,
                            variables: dict[str, str] | None,
                            curriculum_tier: ChallengeTier) -> Generated:
+        if self.aleph_identity != {
+                "evolution": plan.evolution, "generation": plan.generation}:
+            raise ValueError(
+                "coverage identity differs from configured Aleph identity")
         values = {**self.variables, **(variables or {})}
         text = target.text.format(**values)
         created = self.clock()
@@ -329,6 +348,13 @@ class Generator:
                 "selection": COVERAGE_POLICY_VERSION,
                 "silhouette_id": plan.silhouette_id,
                 "aleph_release_id": plan.release_id,
+                "aleph_evolution": plan.evolution,
+                "aleph_generation": plan.generation,
+                "aleph_identity": {
+                    "evolution": plan.evolution, "generation": plan.generation},
+                "aleph_identity_label": (
+                    f"evolution {plan.evolution}/generation {plan.generation}"),
+                "aleph_evolution_contract": plan.evolution_contract,
                 "evaluation_id": plan.evaluation_id,
                 "coverage_topic": target.topic,
                 "target_kind": target.kind,

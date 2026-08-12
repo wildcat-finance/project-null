@@ -9,7 +9,7 @@ The matching Aleph-side release and evidence guide is
 
 ```mermaid
 flowchart LR
-    A["Aleph coverage shape"] --> B["Null challenge"]
+    A["Aleph evolution N/generation M"] --> B["Null challenge"]
     B --> C["Telegram"]
     C --> D["Aleph outcome"]
     D --> E["Human feedback"]
@@ -23,6 +23,14 @@ flowchart LR
 capabilities, rejection behaviour, and evaluation coverage. Null does not
 fine-tune Aleph online, grade factual truth by itself, or write generated text
 into the corpus.
+
+The cycle always names the tested runtime as **evolution N/generation M**.
+Generation begins at 1 inside an evolution. Evolution advances when the shared
+interpretation contract changes: tags, candidate kinds, routes, outcome
+taxonomy, evaluation semantics, chunking policy, or embedding identity. Aleph's
+separate global `activation_sequence` orders activations and rollbacks but is
+not the human-facing identity. Record the pair in every handoff, wave boundary,
+candidate review, report application, activation, and coverage repin.
 
 ## Current implementation boundary
 
@@ -548,7 +556,7 @@ Before ending the session, record:
 - operator identity and lease interval;
 - issue, branch, commit, and PR links;
 - local model alias/ID, Ollama version, prompt/schema and validator versions;
-- Aleph release/coverage identities;
+- Aleph evolution/generation, release, activation-sequence and coverage identities;
 - Null run, mode, paused state, unresolved-review count, candidate-pile count,
   downstream-resolved count, and latest export ID;
 - waves run and disposition counts;

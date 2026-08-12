@@ -19,7 +19,9 @@ Each raw record keeps its own non-sliding deadline. A review one second after a
 probe therefore expires one second later; it does not extend the probe's life.
 Long-term records preserve whether the source was synthetic,
 production-derived, or human-authored. They retain only the source calendar
-date, not the exact message/probe timestamp.
+date, not the exact message/probe timestamp. They also retain the non-identifying
+Aleph `{evolution, generation}` tested by the probe, so later review cannot
+misattribute a result to a different runtime contract.
 
 An allowlisted reviewer may invoke `/finalize@<NullBot>` before the deadline.
 That creates the same permitted long-term records and immediately removes every

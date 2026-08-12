@@ -11,8 +11,8 @@ from datetime import datetime
 
 from .schema import OutcomeKind, ScenarioFamily, parse_utc
 
-COVERAGE_SCHEMA_VERSION = 1
-COVERAGE_POLICY_VERSION = "silhouette-v1"
+COVERAGE_SCHEMA_VERSION = 2
+COVERAGE_POLICY_VERSION = "silhouette-v2"
 MAX_SILHOUETTE_BYTES = 2_000_000
 
 _HEX20 = re.compile(r"^[0-9a-f]{20}$")
@@ -33,6 +33,7 @@ _TOP_LEVEL = {
     "evaluation", "boundary",
 }
 _BINDING = {
+    "evolution", "generation", "evolution_contract",
     "release_id", "release_sha256", "manifest_sha256", "corpus_build_id",
     "corpus_chunks_sha256", "evaluation_id", "evaluation_sha256",
     "questions_sha256", "topic_map_sha256",
@@ -68,6 +69,9 @@ class CoveragePlan:
     silhouette_id: str
     release_id: str
     evaluation_id: str
+    evolution: int
+    generation: int
+    evolution_contract: str
     document_sha256: str
     targets: tuple[CoverageTarget, ...]
     declared_gaps: int
@@ -85,6 +89,10 @@ class CoveragePlan:
             "silhouette_id": self.silhouette_id,
             "release_id": self.release_id,
             "evaluation_id": self.evaluation_id,
+            "evolution": self.evolution,
+            "generation": self.generation,
+            "identity": f"evolution {self.evolution}/generation {self.generation}",
+            "evolution_contract": self.evolution_contract,
             "targets": len(self.targets),
             "declared_gaps": self.declared_gaps,
             "evaluation_total": self.evaluation_total,
@@ -419,6 +427,14 @@ def load(path: str, expected_release_id: str) -> CoveragePlan:
         raise CoverageError("Aleph coverage silhouette is dated in the future")
     binding = _exact_keys(record["binding"], _BINDING, "binding")
     for key, item in binding.items():
+        if key in {"evolution", "generation"}:
+            if isinstance(item, bool) or not isinstance(item, int) or item < 1:
+                raise CoverageError("Aleph coverage evolution is invalid")
+            continue
+        if key == "evolution_contract":
+            if not isinstance(item, str) or not _SLUG.fullmatch(item):
+                raise CoverageError("Aleph coverage evolution contract is invalid")
+            continue
         pattern = _HEX20 if key in {"release_id", "evaluation_id"} else \
             _HEX16 if key == "corpus_build_id" else _HEX64
         if not isinstance(item, str) or not pattern.fullmatch(item):
@@ -458,6 +474,8 @@ def load(path: str, expected_release_id: str) -> CoveragePlan:
         silhouette_id=silhouette_id,
         release_id=binding["release_id"],
         evaluation_id=binding["evaluation_id"],
+        evolution=binding["evolution"], generation=binding["generation"],
+        evolution_contract=binding["evolution_contract"],
         document_sha256=hashlib.sha256(raw).hexdigest(),
         targets=targets, declared_gaps=gaps, evaluation_total=total,
         uncovered_corpus_topics=uncovered,

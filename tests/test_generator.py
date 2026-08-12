@@ -16,6 +16,8 @@ def test_generation_is_reproducible_and_declared():
     assert left == right
     assert left.probe.provenance is Provenance.SYNTHETIC
     assert left.probe.generator["catalog_sha256"] == catalog_hash()
+    assert left.probe.generator["aleph_identity"] == {
+        "evolution": 1, "generation": 1}
     assert left.scenario.expected_outcome.value
 
 

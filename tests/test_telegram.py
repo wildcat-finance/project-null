@@ -64,11 +64,18 @@ def shell(tmp_path, api, clock=lambda: NOW, coverage=None,
           runtime_status=None, monotonic_clock=None):
     store = Store(str(tmp_path / "null.db"))
     instance = TelegramShell(
-        store, Generator(clock=lambda: NOW), api,
+        store, Generator(
+            clock=lambda: NOW,
+            aleph_identity={"evolution": coverage.evolution,
+                            "generation": coverage.generation}
+            if coverage is not None else None), api,
         aleph_username="ProjectAlephWildcat_bot",
         aleph_bot_id=8728174629,
         allowed_chat_ids={-100}, operator_user_ids={7}, clock=clock,
-        coverage=coverage, runtime_status=runtime_status,
+        coverage=coverage, runtime_status=(runtime_status or {
+            "aleph_identity_label": (
+                f"evolution {coverage.evolution}/generation {coverage.generation}"
+                if coverage is not None else "evolution 1/generation 1")}),
         **({"monotonic_clock": monotonic_clock}
            if monotonic_clock is not None else {}))
     instance.startup()
@@ -92,6 +99,8 @@ def coverage_plan():
     )
     return CoveragePlan(
         silhouette_id="a" * 20, release_id="b" * 20,
+        evolution=2, generation=1,
+        evolution_contract="mixed-candidate-dispositions-v2",
         evaluation_id="c" * 20, document_sha256="d" * 64,
         targets=targets, declared_gaps=1, evaluation_total=143)
 
@@ -593,7 +602,8 @@ def test_ping_reports_liveness_generation_and_current_pins(tmp_path):
     ping = [payload["text"] for method, payload in api.calls
             if method == "sendMessage"][-1]
     assert ping.startswith("Pong!\nAlive: 00h 00m 04s")
-    assert "Generation: running; mode=mixed" in ping
+    assert "Loop: running; mode=mixed" in ping
+    assert "evolution 2/generation 1" in ping
     assert f"Run: {'b' * 20}" in ping
     assert "Generator: catalogue-v4" in ping
     assert f"Coverage: {plan.silhouette_id}/{plan.release_id}" in ping

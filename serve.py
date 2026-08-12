@@ -23,6 +23,11 @@ def main() -> int:
         coverage = (load_coverage(
             config.coverage_path, config.coverage_release_id)
             if config.coverage_path is not None else None)
+        if coverage is not None and (
+                coverage.evolution != config.aleph_evolution
+                or coverage.generation != config.aleph_generation):
+            raise OperationsError(
+                "coverage evolution/generation differs from configured Aleph identity")
         store = Store(config.db_path)
         # A fresh deployment starts paused; an allowlisted human explicitly
         # resumes it after the private-group rehearsal.
@@ -30,7 +35,9 @@ def main() -> int:
             store.set_control("paused", "true")
         api = TelegramHTTP()
         shell = TelegramShell(
-            store, Generator(variables=config.probe_variables()), api,
+            store, Generator(
+                variables=config.probe_variables(),
+                aleph_identity=config.aleph_identity_value()), api,
             aleph_username=config.aleph_username,
             aleph_bot_id=config.aleph_bot_id,
             allowed_chat_ids=set(config.allowed_chat_ids),

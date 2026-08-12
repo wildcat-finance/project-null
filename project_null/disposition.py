@@ -22,7 +22,8 @@ _REPORT_V1_KEYS = {"candidate_count", "cases", "counts", "export_id", "ready"}
 _CASE_V1_KEYS = {
     "candidate_id", "expected", "golden_id", "issue", "question", "status",
 }
-_REPORT_V2_KEYS = _REPORT_V1_KEYS | {"evolution", "schema_version"}
+_REPORT_V2_KEYS = _REPORT_V1_KEYS | {
+    "aleph_identity", "evolution", "schema_version"}
 _CASE_V2_KEYS = {
     "candidate_id", "expected", "golden_id", "kind", "question", "reference",
     "status",
@@ -153,13 +154,29 @@ def candidate_counts(store: Store) -> CandidateCounts:
 
 
 def apply(store: Store, artifacts_path: str, report_path: str,
-          acknowledged_at: str | None = None) -> ApplyReport:
+          acknowledged_at: str | None = None,
+          expected_evolution: int | None = None,
+          expected_generation: int | None = None) -> ApplyReport:
     _, report_value = _read_json(pathlib.Path(report_path).resolve())
     if isinstance(report_value, dict) and "schema_version" in report_value:
         report = _mapping(report_value, _REPORT_V2_KEYS, "acknowledgement report")
         if (report["schema_version"] != 2
                 or report["evolution"] != _REPORT_V2_EVOLUTION):
             raise DispositionError("unsupported acknowledgement evolution")
+        identity = report["aleph_identity"]
+        if (not isinstance(identity, dict)
+                or set(identity) != {"evolution", "generation"}
+                or any(isinstance(identity.get(key), bool)
+                       or not isinstance(identity.get(key), int)
+                       or identity[key] < 1
+                       for key in ("evolution", "generation"))):
+            raise DispositionError("report Aleph evolution/generation is invalid")
+        if ((expected_evolution is not None
+             and identity["evolution"] != expected_evolution)
+                or (expected_generation is not None
+                    and identity["generation"] != expected_generation)):
+            raise DispositionError(
+                "report Aleph evolution/generation differs from active identity")
         report_version = 2
     else:
         report = _mapping(report_value, _REPORT_V1_KEYS, "acknowledgement report")

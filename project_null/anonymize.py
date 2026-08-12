@@ -100,12 +100,14 @@ class Anonymizer:
         if scenario is None:
             raise AnonymizationError("reviewed probe has no scenario")
         question_text = redact(probe["text"])
+        aleph_identity = probe.get("generator", {}).get("aleph_identity")
         basis = {
             "text": question_text,
             "provenance": probe["provenance"],
             "family": scenario["family"],
             "expected": reviewed["expected_outcome"],
             "decision": decision.value,
+            "aleph_identity": aleph_identity,
         }
         question_id = stable_id("question", basis)
         question = AnonymizedQuestion(
@@ -115,7 +117,7 @@ class Anonymizer:
             expected_outcome=OutcomeKind(reviewed["expected_outcome"]),
             decision=decision,
             source_date=probe["generated_at"][:10],
-            anonymized_at=boundary)
+            anonymized_at=boundary, aleph_identity=aleph_identity)
         anonymized = 0
         if self.store.get(question_id) is None:
             self.store.append(question)
@@ -133,7 +135,8 @@ class Anonymizer:
             expected_outcome=OutcomeKind(reviewed["expected_outcome"]),
             rationale=rationale,
             provenance=Provenance(probe["provenance"]),
-            evidence_targets=(), created_at=boundary)
+            evidence_targets=(), created_at=boundary,
+            aleph_identity=aleph_identity)
         candidates = 0
         if self.store.get(candidate_id) is None:
             self.store.append(candidate)

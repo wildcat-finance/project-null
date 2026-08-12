@@ -43,6 +43,8 @@ class Config:
     source_revision: str = "development"
     coverage_path: str | None = None
     coverage_release_id: str | None = None
+    aleph_evolution: int | None = None
+    aleph_generation: int | None = None
 
     def __post_init__(self) -> None:
         if not 0 <= self.poll_timeout <= 50:
@@ -61,6 +63,14 @@ class Config:
         if bool(self.coverage_path) != bool(self.coverage_release_id):
             raise OperationsError(
                 "NULL_ALEPH_COVERAGE and NULL_ALEPH_COVERAGE_RELEASE must be set together")
+        if (isinstance(self.aleph_evolution, bool)
+                or not isinstance(self.aleph_evolution, int)
+                or self.aleph_evolution < 1
+                or isinstance(self.aleph_generation, bool)
+                or not isinstance(self.aleph_generation, int)
+                or self.aleph_generation < 1):
+            raise OperationsError(
+                "NULL_ALEPH_EVOLUTION and NULL_ALEPH_GENERATION must be positive integers")
         if (self.coverage_release_id is not None
                 and (len(self.coverage_release_id) != 20
                      or any(character not in "0123456789abcdef"
@@ -91,9 +101,11 @@ class Config:
         try:
             poll_timeout = int(env.get("NULL_POLL_TIMEOUT", "30"))
             aleph_bot_id = int(env.get("NULL_ALEPH_BOT_ID", ""))
+            aleph_evolution = int(env.get("NULL_ALEPH_EVOLUTION", ""))
+            aleph_generation = int(env.get("NULL_ALEPH_GENERATION", ""))
         except ValueError as error:
             raise OperationsError(
-                "NULL_POLL_TIMEOUT and NULL_ALEPH_BOT_ID must be integers") from error
+                "poll, bot and Aleph evolution/generation values must be integers") from error
         return cls(
             db_path=env.get("NULL_DB", "state/null.db"),
             artifacts_path=env.get("NULL_ARTIFACTS", "artifacts"),
@@ -112,6 +124,8 @@ class Config:
                            or None),
             coverage_release_id=(
                 env.get("NULL_ALEPH_COVERAGE_RELEASE", "").strip() or None),
+            aleph_evolution=aleph_evolution,
+            aleph_generation=aleph_generation,
         )
 
     def public(self) -> dict:
@@ -134,6 +148,13 @@ class Config:
             "raw_retention_seconds": int(RAW_RETENTION.total_seconds()),
             "coverage_configured": self.coverage_path is not None,
             "coverage_release_id": self.coverage_release_id,
+            "aleph_evolution": self.aleph_evolution,
+            "aleph_generation": self.aleph_generation,
+            "aleph_identity": {"evolution": self.aleph_evolution,
+                               "generation": self.aleph_generation},
+            "aleph_identity_label": (
+                f"evolution {self.aleph_evolution}/generation "
+                f"{self.aleph_generation}"),
         }
 
     def probe_variables(self) -> dict[str, str]:
@@ -142,6 +163,10 @@ class Config:
             "market_address": self.probe_market_address,
             "account_address": self.probe_account_address,
         }
+
+    def aleph_identity_value(self) -> dict[str, int]:
+        return {"evolution": self.aleph_evolution,
+                "generation": self.aleph_generation}
 
 
 def _bytes(value: dict) -> bytes:
@@ -250,7 +275,9 @@ def health_report(store: Store, api, config: Config,
     coverage_matches = (
         (coverage is None and config.coverage_path is None)
         or (coverage is not None and config.coverage_path is not None
-            and coverage.release_id == config.coverage_release_id)
+            and coverage.release_id == config.coverage_release_id
+            and coverage.evolution == config.aleph_evolution
+            and coverage.generation == config.aleph_generation)
     )
     return {
         "ok": bool(store.integrity()

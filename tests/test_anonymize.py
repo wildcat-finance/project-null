@@ -38,9 +38,12 @@ def test_anonymization_breaks_telegram_link_and_scrubs_storage(tmp_path):
     first = Anonymizer(store).run("2026-09-10T00:00:00Z")
     assert first.anonymized == first.candidates == 1
     question = store.list("anonymized_question")[0]
+    candidate = store.list("export_candidate")[0]
     assert question["text"] == (
         "Ask [username] about [address] at [url] and ticket [identifier].")
     assert "probe_id" not in question and "chat_id" not in question
+    assert question["aleph_identity"] == candidate["aleph_identity"] == {
+        "evolution": 1, "generation": 1}
     # One second later the feedback reaches its own, non-sliding deadline.
     Anonymizer(store).run("2026-09-10T00:00:01Z")
     assert store.list("probe") == store.list("delivery") == store.list("feedback") == []

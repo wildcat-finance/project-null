@@ -100,6 +100,7 @@ def mixed_report(candidates, export_id, statuses):
     names = ("accepted", "deferred", "duplicate", "needs_review", "rejected")
     counts = {name: statuses.count(name) for name in names}
     return {
+        "aleph_identity": {"evolution": 2, "generation": 1},
         "candidate_count": len(candidates),
         "cases": cases,
         "counts": counts,

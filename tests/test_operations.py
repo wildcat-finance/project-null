@@ -30,6 +30,8 @@ def environment(tmp_path):
         "NULL_OPERATOR_USER_IDS": "987654321",
         "NULL_ALEPH_USERNAME": "ProjectAlephWildcat_bot",
         "NULL_ALEPH_BOT_ID": "8728174629",
+        "NULL_ALEPH_EVOLUTION": "2",
+        "NULL_ALEPH_GENERATION": "1",
         "NULL_PROBE_MARKET_ADDRESS": "0x1111111111111111111111111111111111111111",
         "NULL_PROBE_ACCOUNT_ADDRESS": "0x2222222222222222222222222222222222222222",
         "NULL_SOURCE_REVISION": "abc1234",
@@ -40,6 +42,8 @@ def environment(tmp_path):
 def coverage_plan():
     return CoveragePlan(
         silhouette_id="a" * 20, release_id="b" * 20,
+        evolution=2, generation=1,
+        evolution_contract="mixed-candidate-dispositions-v2",
         evaluation_id="c" * 20, document_sha256="d" * 64,
         targets=(CoverageTarget(
             target_id="coverage-false-premises-route-boundary",
@@ -54,6 +58,8 @@ def test_public_configuration_and_run_hide_identity_and_token(tmp_path):
     env = environment(tmp_path)
     env["NULL_ALEPH_COVERAGE"] = str(tmp_path / "silhouette.json")
     env["NULL_ALEPH_COVERAGE_RELEASE"] = "b" * 20
+    env["NULL_ALEPH_EVOLUTION"] = "2"
+    env["NULL_ALEPH_GENERATION"] = "1"
     config = Config.from_env(env)
     coverage = coverage_plan()
     record = publish_run(
@@ -84,15 +90,21 @@ def test_config_requires_explicit_allowlists(tmp_path):
     with pytest.raises(OperationsError, match="non-empty"):
         Config.from_env({"NULL_ALLOWED_CHAT_IDS": "",
                          "NULL_OPERATOR_USER_IDS": "7",
-                         "NULL_ALEPH_BOT_ID": "8728174629"})
+                         "NULL_ALEPH_BOT_ID": "8728174629",
+                         "NULL_ALEPH_EVOLUTION": "2",
+                         "NULL_ALEPH_GENERATION": "1"})
     with pytest.raises(OperationsError, match="group chat IDs"):
         Config.from_env({"NULL_ALLOWED_CHAT_IDS": "100",
                          "NULL_OPERATOR_USER_IDS": "7",
-                         "NULL_ALEPH_BOT_ID": "8728174629"})
+                         "NULL_ALEPH_BOT_ID": "8728174629",
+                         "NULL_ALEPH_EVOLUTION": "2",
+                         "NULL_ALEPH_GENERATION": "1"})
     with pytest.raises(OperationsError, match="positive user IDs"):
         Config.from_env({"NULL_ALLOWED_CHAT_IDS": "-100",
                          "NULL_OPERATOR_USER_IDS": "-7",
-                         "NULL_ALEPH_BOT_ID": "8728174629"})
+                         "NULL_ALEPH_BOT_ID": "8728174629",
+                         "NULL_ALEPH_EVOLUTION": "2",
+                         "NULL_ALEPH_GENERATION": "1"})
 
 
 def test_config_requires_nonzero_probe_context(tmp_path):
@@ -112,6 +124,8 @@ def test_coverage_configuration_requires_a_path_and_release_pair(tmp_path):
     with pytest.raises(OperationsError, match="must be set together"):
         Config.from_env(env)
     env["NULL_ALEPH_COVERAGE_RELEASE"] = "not-a-release"
+    env["NULL_ALEPH_EVOLUTION"] = "2"
+    env["NULL_ALEPH_GENERATION"] = "1"
     with pytest.raises(OperationsError, match="20-character hexadecimal"):
         Config.from_env(env)
     env["NULL_ALEPH_COVERAGE_RELEASE"] = "a" * 20
@@ -124,6 +138,8 @@ def test_health_and_audit_are_scrubbed(tmp_path):
     env = environment(tmp_path)
     env["NULL_ALEPH_COVERAGE"] = str(tmp_path / "silhouette.json")
     env["NULL_ALEPH_COVERAGE_RELEASE"] = "b" * 20
+    env["NULL_ALEPH_EVOLUTION"] = "2"
+    env["NULL_ALEPH_GENERATION"] = "1"
     config = Config.from_env(env)
     store = Store(config.db_path)
     store.set_control("paused", "true")
@@ -151,6 +167,8 @@ def test_health_fails_when_loaded_coverage_differs_from_configured_release(
     env = environment(tmp_path)
     env["NULL_ALEPH_COVERAGE"] = str(tmp_path / "silhouette.json")
     env["NULL_ALEPH_COVERAGE_RELEASE"] = "e" * 20
+    env["NULL_ALEPH_EVOLUTION"] = "2"
+    env["NULL_ALEPH_GENERATION"] = "1"
     config = Config.from_env(env)
     store = Store(config.db_path)
 
