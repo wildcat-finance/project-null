@@ -18,10 +18,16 @@ class DispositionError(RuntimeError):
     """A downstream acknowledgement cannot be bound to Null's candidates."""
 
 
-_REPORT_KEYS = {"candidate_count", "cases", "counts", "export_id", "ready"}
-_CASE_KEYS = {
+_REPORT_V1_KEYS = {"candidate_count", "cases", "counts", "export_id", "ready"}
+_CASE_V1_KEYS = {
     "candidate_id", "expected", "golden_id", "issue", "question", "status",
 }
+_REPORT_V2_KEYS = _REPORT_V1_KEYS | {"evolution", "schema_version"}
+_CASE_V2_KEYS = {
+    "candidate_id", "expected", "golden_id", "kind", "question", "reference",
+    "status",
+}
+_REPORT_V2_EVOLUTION = "mixed-candidate-dispositions-v2"
 _COUNT_KEYS = {"accepted", "deferred", "duplicate", "needs_review", "rejected"}
 _TERMINAL = {"accepted", "duplicate", "rejected"}
 _ALEPH_ROUTES = {
@@ -96,19 +102,20 @@ def _load_export(artifacts_path: str, export_id: str) -> tuple[dict, list[dict]]
         raise DispositionError("corpus-proposals.json is not canonical Null JSON")
     if not isinstance(regression_value, list) or not isinstance(corpus_value, list):
         raise DispositionError("export candidate files must contain lists")
-    if corpus_value:
-        raise DispositionError(
-            "a regression acknowledgement cannot disposition corpus proposals")
-    candidates = regression_value
+    if any(not isinstance(item, dict)
+           for item in [*regression_value, *corpus_value]):
+        raise DispositionError("export contains a malformed candidate")
+    candidates = sorted(
+        [*regression_value, *corpus_value], key=lambda item: item.get("candidate_id", ""))
     candidate_ids = []
     for item in candidates:
         if (not isinstance(item, dict)
                 or not isinstance(item.get("candidate_id"), str)
                 or item.get("record_type") != "export_candidate"
                 or item.get("schema_version") != 1
-                or item.get("kind") != "regression"
+                or item.get("kind") not in {"regression", "corpus_proposal"}
                 or not isinstance(item.get("question"), str)):
-            raise DispositionError("export contains a malformed regression candidate")
+            raise DispositionError("export contains a malformed candidate")
         candidate_ids.append(item["candidate_id"])
     if (candidate_ids != sorted(candidate_ids)
             or len(set(candidate_ids)) != len(candidate_ids)):
@@ -116,7 +123,8 @@ def _load_export(artifacts_path: str, export_id: str) -> tuple[dict, list[dict]]
     if manifest["candidate_ids"] != candidate_ids:
         raise DispositionError("manifest candidate IDs do not match export")
     if manifest["counts"] != {
-            "regression": len(candidates), "corpus_proposals": 0}:
+            "regression": len(regression_value),
+            "corpus_proposals": len(corpus_value)}:
         raise DispositionError("manifest counts do not match export")
     basis = {
         "schema_version": 1,
@@ -147,7 +155,15 @@ def candidate_counts(store: Store) -> CandidateCounts:
 def apply(store: Store, artifacts_path: str, report_path: str,
           acknowledged_at: str | None = None) -> ApplyReport:
     _, report_value = _read_json(pathlib.Path(report_path).resolve())
-    report = _mapping(report_value, _REPORT_KEYS, "acknowledgement report")
+    if isinstance(report_value, dict) and "schema_version" in report_value:
+        report = _mapping(report_value, _REPORT_V2_KEYS, "acknowledgement report")
+        if (report["schema_version"] != 2
+                or report["evolution"] != _REPORT_V2_EVOLUTION):
+            raise DispositionError("unsupported acknowledgement evolution")
+        report_version = 2
+    else:
+        report = _mapping(report_value, _REPORT_V1_KEYS, "acknowledgement report")
+        report_version = 1
     export_id = report["export_id"]
     if not isinstance(export_id, str):
         raise DispositionError("report export_id must be a string")
@@ -168,7 +184,9 @@ def apply(store: Store, artifacts_path: str, report_path: str,
     seen = set()
     terminal = []
     for value in cases:
-        case = _mapping(value, _CASE_KEYS, "report case")
+        case = _mapping(
+            value, _CASE_V2_KEYS if report_version == 2 else _CASE_V1_KEYS,
+            "report case")
         candidate_id = case["candidate_id"]
         status = case["status"]
         if not isinstance(candidate_id, str) or candidate_id in seen:
@@ -183,24 +201,45 @@ def apply(store: Store, artifacts_path: str, report_path: str,
             raise DispositionError(f"report names unknown candidate {candidate_id}")
         if case["question"] != candidate.get("question"):
             raise DispositionError(f"report changed question for {candidate_id}")
+        candidate_kind = candidate["kind"]
+        if report_version == 1:
+            if candidate_kind != "regression":
+                raise DispositionError(
+                    "version 1 reports cannot disposition corpus proposals")
+            reference_value = case["issue"]
+        else:
+            if case["kind"] != candidate_kind:
+                raise DispositionError(
+                    f"report changed candidate kind for {candidate_id}")
+            reference_value = case["reference"]
         seen.add(candidate_id)
         statuses[status] += 1
-        golden_id, issue = case["golden_id"], case["issue"]
-        if status in {"accepted", "duplicate"}:
-            if not isinstance(golden_id, str) or not golden_id.strip() or issue is not None:
+        golden_id = case["golden_id"]
+        if status in {"accepted", "duplicate"} and candidate_kind == "regression":
+            if (not isinstance(golden_id, str) or not golden_id.strip()
+                    or reference_value is not None):
                 raise DispositionError(
                     f"{status} disposition needs only a golden case reference")
             reference = golden_id
+        elif status in {"accepted", "duplicate"}:
+            if (golden_id is not None or not isinstance(reference_value, str)
+                    or not reference_value.strip()):
+                raise DispositionError(
+                    f"{status} corpus disposition needs only an evidence reference")
+            reference = reference_value
         elif status == "rejected":
             if golden_id is not None:
                 raise DispositionError("rejected disposition cannot name a golden case")
-            reference = issue if isinstance(issue, str) and issue.strip() else "rejected"
+            reference = (reference_value if isinstance(reference_value, str)
+                         and reference_value.strip() else "rejected")
         elif status == "deferred":
-            if golden_id is not None or not isinstance(issue, str) or not issue.strip():
-                raise DispositionError("deferred disposition needs only a tracking issue")
+            if (golden_id is not None or not isinstance(reference_value, str)
+                    or not reference_value.strip()):
+                raise DispositionError(
+                    "deferred disposition needs only a tracking reference")
             continue
         else:
-            if golden_id is not None or issue is not None:
+            if golden_id is not None or reference_value is not None:
                 raise DispositionError("needs_review disposition cannot name a target")
             continue
         terminal.append((candidate_id, status, reference))
