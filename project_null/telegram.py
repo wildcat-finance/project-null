@@ -608,7 +608,7 @@ class TelegramShell:
             f"catalog={status.get('catalog_sha256', 'unknown')}; "
             f"policy={status.get('mixed_policy_version', 'unknown')}",
             f"Curriculum: {curriculum['version']}",
-            f"Local model: {model.get('mode', 'disabled')}; "
+            f"Proteus: {model.get('mode', 'disabled')}; "
             f"alias={model.get('alias') or 'none'}; "
             f"id={model.get('id') or 'none'}; "
             f"shadow total={observations['total']}, "

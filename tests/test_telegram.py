@@ -626,6 +626,7 @@ def test_ping_reports_liveness_generation_and_current_pins(tmp_path):
     assert "evolution 2/generation 1" in ping
     assert f"Run: {'b' * 20}" in ping
     assert "Generator: catalogue-v4" in ping
+    assert "Proteus: disabled; alias=none; id=none" in ping
     assert f"Coverage: {plan.silhouette_id}/{plan.release_id}" in ping
     assert "Review: unreviewed=0; candidate_pile=0; candidate_resolved=0" in ping
     assert "Source: deadbeef" in ping

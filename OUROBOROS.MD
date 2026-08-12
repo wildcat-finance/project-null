@@ -34,10 +34,12 @@ candidate review, report application, activation, and coverage repin.
 
 ## Current implementation boundary
 
-Null currently uses its deterministic catalogue and Aleph currently uses
-`ExtractiveWriter`. The organisation-authenticated shared tunnel and optional
-local generation adapters described below are the target operating design, not
-a claim that they are already deployed. Before using the acquisition commands,
+Null's optional local inference participant is **Proteus**; Aleph's is
+**Mephistopheles**. Null currently uses its deterministic catalogue and Aleph
+currently uses `ExtractiveWriter`. The organisation-authenticated shared tunnel
+and optional local generation adapters described below are the target operating
+design, not a claim that they are already deployed. Before using the acquisition
+commands,
 verify a reviewed infrastructure issue has installed the Tailscale boundary,
 separate SSH unit, model identity monitoring, and deterministic fallback tests.
 If any part is absent, stop and implement it through the normal
@@ -231,7 +233,7 @@ forwarding-only connection: OpenSSH does not count the listener as an open
 channel. The documented client opens the forced session, which ends after four
 hours and closes the forward.
 
-## Local Ollama boundary
+## Proteus local Ollama boundary
 
 The first full model candidate is the official Ollama
 [`gpt-oss:120b`](https://ollama.com/library/gpt-oss:120b) package;
@@ -339,9 +341,9 @@ sudo journalctl -u ouroboros-sshd.service --since '10 minutes ago' --no-pager
 Then run the application model health check. `/api/version` proves an Ollama
 server exists; only the alias/digest check proves it is the approved candidate.
 
-## Null's model envelope
+## Proteus model envelope
 
-Null's deterministic `Generator` remains authoritative for:
+Null's deterministic `Generator` remains authoritative for Proteus's inputs:
 
 - family;
 - foundation/contextual/adversarial tier;
@@ -352,8 +354,8 @@ Null's deterministic `Generator` remains authoritative for:
 - seed and exposure history; and
 - the fallback question.
 
-A local model may paraphrase one already-selected challenge. It may not choose
-what Aleph should believe or invent a factual scenario.
+Proteus may paraphrase one already-selected challenge. It may not choose what
+Aleph should believe or invent a factual scenario.
 
 The strict response contains one question and validator metadata. Reject it
 unless:
@@ -396,8 +398,8 @@ NULL_LOCAL_MODEL_ID=a951a23b46a1
 NULL_LOCAL_MODEL_TIMEOUT=20
 ```
 
-Before each inference, Null resolves the alias through Ollama and refuses a
-changed or ambiguous identity. The request gets only the already-rendered
+Before each Proteus inference, Null resolves the alias through Ollama and
+refuses a changed or ambiguous identity. The request gets only the already-rendered
 deterministic question and addresses present in it. `/status`, `/ping`, and the
 health report show scrubbed valid/rejected/fallback totals; the candidate text
 and reasoning trace are discarded even when validation succeeds.
