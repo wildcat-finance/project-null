@@ -23,6 +23,12 @@ Production traffic is valuable but uneven. Null supplies a steady stream of synt
 scenario seed → Null question → Telegram → Aleph outcome → review → corpus/eval candidate
 ```
 
+[`OUROBOROS.MD`](OUROBOROS.MD) is the cold-read operator handoff for continuing
+this loop. It defines the one-operator lease, organisation-authenticated local
+model tunnel, controlled burst/review/finalization process, Aleph handoff,
+privacy boundaries, and emergency revocation without distributing production
+credentials.
+
 Each probe carries a private correlation ID and a declared test intent. The Telegram message itself should read like an ordinary user question; hidden metadata records what Null meant to test.
 
 An outcome is classified as one of:
