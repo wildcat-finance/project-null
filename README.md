@@ -149,10 +149,11 @@ Single-family mode remains catalogue-only so a reviewer can rehearse one family
 without the coverage scheduler intervening. If no silhouette is configured,
 generation is the ordinary novelty curriculum.
 
-### Local inference: shadow adapter
+### Proteus: local inference shadow adapter
 
-Null can ask one identity-pinned Ollama model for a candidate paraphrase after
-the deterministic curriculum has selected the complete challenge. The first
+Null's optional local inference participant is named **Proteus**. Proteus can
+ask one identity-pinned Ollama model for a candidate paraphrase after the
+deterministic curriculum has selected the complete challenge. The first
 implemented mode is shadow-only: Null validates and discards the candidate,
 while Telegram still receives the original deterministic question.
 

@@ -1,4 +1,4 @@
-"""Fail-closed Ollama shadow paraphrasing for deterministic Null probes."""
+"""Proteus: fail-closed local shadow paraphrasing for deterministic Null probes."""
 from __future__ import annotations
 
 import json
@@ -73,7 +73,7 @@ class ShadowObservation:
 
 
 class OllamaShadowParaphraser:
-    """Ask one pinned Ollama model for a discarded, validated paraphrase."""
+    """Run Proteus through one pinned Ollama model and discard its candidate."""
     def __init__(self, *, url: str, model: str, model_id: str,
                  timeout: float = 20.0, opener: Callable = urllib.request.urlopen,
                  monotonic: Callable[[], float] = time.monotonic):
