@@ -251,8 +251,11 @@ OLLAMA_MAX_QUEUE=32
 ```
 
 Record the model alias, observed Ollama ID, Ollama version, prompt/schema
-version, context, options, and validator version. Tags are mutable; a changed
-ID is a new candidate and must rerun the gates.
+version, context, options, reasoning mode, and validator version. Tags are
+mutable; a changed ID is a new candidate and must rerun the gates. The shadow
+adapter uses GPT-OSS's lowest reasoning level and reads only the final
+schema-constrained content. It never parses, logs, stores, or trains on the
+separate reasoning trace.
 
 Do not use an “abliterated” or otherwise safety-stripped model. Null deliberately
 tests abuse, prompt injection, refusal, and scope boundaries; removing model
@@ -381,6 +384,23 @@ Use modes in order:
 Start selective delivery with ordinary and novice questions. Keep live,
 historical, false-premise, prompt-injection, abusive, and ambiguous families on
 the deterministic path until their specific validators pass.
+
+Only `disabled` and `shadow` are implemented. Configure shadow mode with an
+explicit loopback endpoint and an alias plus digest pin:
+
+```text
+NULL_LOCAL_MODEL_MODE=shadow
+NULL_LOCAL_MODEL_URL=http://127.0.0.1:11435
+NULL_LOCAL_MODEL=gpt-oss:120b
+NULL_LOCAL_MODEL_ID=a951a23b46a1
+NULL_LOCAL_MODEL_TIMEOUT=20
+```
+
+Before each inference, Null resolves the alias through Ollama and refuses a
+changed or ambiguous identity. The request gets only the already-rendered
+deterministic question and addresses present in it. `/status`, `/ping`, and the
+health report show scrubbed valid/rejected/fallback totals; the candidate text
+and reasoning trace are discarded even when validation succeeds.
 
 ## Run a controlled wave
 
