@@ -1,3 +1,4 @@
+import dataclasses
 import json
 
 import pytest
@@ -7,7 +8,8 @@ from project_null.generator import (
     CURRICULUM_VERSION, Generator, MIXED_POLICY_VERSION,
 )
 from project_null.operations import (
-    Config, OperationsError, health_report, local_model_observations, publish_run,
+    Config, OperationsError, health_report, local_model_observations,
+    ouroboros_snapshot, publish_run,
     record_peer_reply_evidence, write_audit,
 )
 from project_null.store import Store
@@ -187,6 +189,54 @@ def test_local_model_observations_are_empty_without_shadow_probes(tmp_path):
     store = Store(str(tmp_path / "null.db"))
     assert local_model_observations(store) == {
         "total": 0, "valid": 0, "rejected": 0, "fallback": 0}
+
+
+def test_ouroboros_snapshot_is_exact_deterministic_and_scrubbed(tmp_path):
+    env = environment(tmp_path)
+    env["NULL_ALEPH_COVERAGE"] = str(tmp_path / "silhouette.json")
+    env["NULL_ALEPH_COVERAGE_RELEASE"] = "b" * 20
+    env["NULL_ALEPH_EVOLUTION"] = "2"
+    env["NULL_ALEPH_GENERATION"] = "1"
+    config = Config.from_env(env)
+    store = Store(config.db_path)
+    store.set_control("run_id", "c" * 20)
+    store.set_control("paused", "true")
+    store.set_control("mode", "mixed")
+    generated = Generator(clock=lambda: "2026-08-11T00:03:30Z").generate(seed=1)
+    store.append(generated.scenario)
+    store.append(generated.probe)
+    first = ouroboros_snapshot(store, config, coverage_plan())
+    second = ouroboros_snapshot(store, config, coverage_plan())
+    assert first == second
+    assert first == {
+        "schema_version": 1, "source_revision": "abc1234",
+        "run_id": "c" * 20, "mode": "mixed", "paused": True,
+        "queue_count": 1, "candidate_pile": 0, "candidate_resolved": 0,
+        "coverage_release_id": "b" * 20, "evolution": 2,
+        "generation": 1, "snapshot_sha256": first["snapshot_sha256"]}
+    encoded = json.dumps(first)
+    assert generated.probe.text not in encoded
+    assert env["NULL_PROBE_MARKET_ADDRESS"] not in encoded
+    assert env["NULL_PROBE_ACCOUNT_ADDRESS"] not in encoded
+    store.close()
+
+
+def test_ouroboros_snapshot_fails_on_missing_or_drifted_identity(tmp_path):
+    env = environment(tmp_path)
+    env["NULL_ALEPH_COVERAGE"] = str(tmp_path / "silhouette.json")
+    env["NULL_ALEPH_COVERAGE_RELEASE"] = "b" * 20
+    config = Config.from_env(env)
+    store = Store(config.db_path)
+    with pytest.raises(OperationsError, match="requires loaded coverage"):
+        ouroboros_snapshot(store, config, None)
+    with pytest.raises(OperationsError, match="run identity"):
+        ouroboros_snapshot(store, config, coverage_plan())
+    store.set_control("run_id", "c" * 20)
+    store.set_control("paused", "true")
+    drifted = dataclasses.replace(coverage_plan(), generation=2)
+    with pytest.raises(OperationsError, match="differs"):
+        ouroboros_snapshot(store, config, drifted)
+    store.close()
 
 
 def test_health_fails_when_loaded_coverage_differs_from_configured_release(

@@ -21,11 +21,13 @@ from .local_model import (
     MODEL_SCHEMA_VERSION, PROMPT_VERSION, REASONING_MODE, VALIDATOR_VERSION,
 )
 from .disposition import candidate_counts
-from .schema import RAW_RETENTION, SCHEMA_VERSION, parse_utc, utc_now
+from .schema import (RAW_RETENTION, SCHEMA_VERSION, ScenarioFamily, parse_utc,
+                     utc_now)
 from .store import Store
 
 _PEER_REPLY_CONTROL = "peer_reply_evidence"
 _AUDIT_STATE_CONTROL = "audit_state_sha256"
+OUROBOROS_SNAPSHOT_VERSION = 1
 
 
 class OperationsError(RuntimeError):
@@ -312,6 +314,49 @@ def local_model_observations(store: Store) -> dict[str, int]:
             counts[status] += 1
             counts["total"] += 1
     return counts
+
+
+def ouroboros_snapshot(store: Store, config: Config,
+                       coverage: CoveragePlan | None = None) -> dict:
+    """Return exact content-free state for a remote Ouroboros controller."""
+    if not store.integrity():
+        raise OperationsError("Null database integrity check failed")
+    if coverage is None:
+        raise OperationsError("Ouroboros snapshot requires loaded coverage")
+    configured = (config.coverage_release_id, config.aleph_evolution,
+                  config.aleph_generation)
+    observed = (coverage.release_id, coverage.evolution, coverage.generation)
+    if configured != observed:
+        raise OperationsError(
+            "coverage identity differs from configured Aleph identity")
+    run_id = store.control("run_id")
+    if not isinstance(run_id, str) or not run_id.strip():
+        raise OperationsError("Null run identity is absent")
+    paused_value = store.control("paused")
+    if paused_value not in {"true", "false"}:
+        raise OperationsError("Null pause state is invalid")
+    mode = store.control("mode", "mixed")
+    if mode not in {"mixed", *(item.value for item in ScenarioFamily)}:
+        raise OperationsError("Null mode is invalid")
+    probes = store.list("probe")
+    unreviewed = sum(not store.list("feedback", probe_id=item["probe_id"])
+                     for item in probes)
+    candidates = candidate_counts(store)
+    value = {
+        "schema_version": OUROBOROS_SNAPSHOT_VERSION,
+        "source_revision": config.source_revision,
+        "run_id": run_id,
+        "mode": mode,
+        "paused": paused_value == "true",
+        "queue_count": unreviewed,
+        "candidate_pile": candidates.unresolved,
+        "candidate_resolved": candidates.resolved,
+        "coverage_release_id": coverage.release_id,
+        "evolution": coverage.evolution,
+        "generation": coverage.generation,
+    }
+    value["snapshot_sha256"] = hashlib.sha256(_bytes(value)).hexdigest()
+    return value
 
 
 def health_report(store: Store, api, config: Config,

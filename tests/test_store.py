@@ -33,6 +33,20 @@ def test_records_are_immutable(tmp_path):
     store.close()
 
 
+def test_read_only_store_does_not_create_or_mutate_database(tmp_path):
+    path = tmp_path / "null.db"
+    writable = Store(str(path))
+    writable.set_control("paused", "true")
+    writable.close()
+    read_only = Store(str(path), read_only=True)
+    assert read_only.control("paused") == "true"
+    with pytest.raises(StoreError):
+        read_only.set_control("paused", "false")
+    read_only.close()
+    with pytest.raises(StoreError, match="absent"):
+        Store(str(tmp_path / "missing.db"), read_only=True)
+
+
 def test_expiry_and_probe_lookup(tmp_path):
     store = Store(str(tmp_path / "null.db"))
     item = probe()
