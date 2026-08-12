@@ -186,6 +186,25 @@ state, mode, or record counts change. The five-minute monitor remains the
 heartbeat. Existing snapshots are immutable; unchanged long-poll iterations do
 not create redundant files.
 
+## Local Ouroboros snapshot
+
+`snapshot.py` is the read-only handoff from Null to Aleph's local Ouroboros
+controller. Invoke it through a service-manager wrapper that supplies the same
+root-owned environment file as the bot; do not expand secrets into shell
+history.
+
+The command opens the existing SQLite database in read-only/query-only mode and
+emits one canonical JSON object. It contains the source revision, run ID, pause
+and mode state, exact unreviewed and candidate counts, and the coverage
+release's evolution/generation. It has no wall clock, so unchanged state
+produces identical bytes and the same `snapshot_sha256`.
+
+The snapshot contains no question, answer, feedback note, Telegram identifier,
+address, token, model output, or reasoning. It fails when database integrity,
+run identity, pause/mode state, coverage, or configured Aleph identity cannot be
+proven. The Aleph controller consumes this object as a state assertion; it does
+not receive Null's database or credentials.
+
 ## Backups
 
 Backups of `/var/lib/project-null` contain identifiable raw data until each

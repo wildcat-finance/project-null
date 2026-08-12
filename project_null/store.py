@@ -17,8 +17,21 @@ class StoreError(RuntimeError):
 
 
 class Store:
-    def __init__(self, path: str):
+    def __init__(self, path: str, *, read_only: bool = False):
         self.path = pathlib.Path(path).resolve()
+        self.read_only = read_only
+        if read_only:
+            if not self.path.is_file():
+                raise StoreError("read-only database is absent")
+            try:
+                self.connection = sqlite3.connect(
+                    f"file:{self.path}?mode=ro", uri=True)
+                self.connection.row_factory = sqlite3.Row
+                self.connection.execute("PRAGMA query_only=ON")
+            except sqlite3.Error as error:
+                raise StoreError(
+                    f"read-only database cannot be opened: {error}") from error
+            return
         self.path.parent.mkdir(parents=True, exist_ok=True)
         try:
             descriptor = os.open(self.path, os.O_CREAT | os.O_APPEND, 0o600)
@@ -61,6 +74,10 @@ class Store:
             if candidate.exists():
                 os.chmod(candidate, 0o600)
 
+    def _writable(self) -> None:
+        if self.read_only:
+            raise StoreError("store is read-only")
+
     def close(self) -> None:
         self.connection.close()
 
@@ -76,6 +93,7 @@ class Store:
         self.append_many([record])
 
     def append_many(self, records: list[Record]) -> None:
+        self._writable()
         rows = []
         for record in records:
             payload = to_dict(record)
@@ -132,6 +150,7 @@ class Store:
         return [json.loads(row["payload"]) for row in rows]
 
     def delete_records(self, identifiers: list[str]) -> int:
+        self._writable()
         if not identifiers:
             return 0
         placeholders = ",".join("?" for _ in identifiers)
@@ -142,6 +161,7 @@ class Store:
         return cursor.rowcount
 
     def delete_controls(self, prefix: str) -> int:
+        self._writable()
         with self.connection:
             cursor = self.connection.execute(
                 "DELETE FROM controls WHERE name LIKE ?", (prefix + "%",))
@@ -149,6 +169,7 @@ class Store:
 
     def compact(self) -> None:
         """Remove deleted raw bytes from free pages and the WAL."""
+        self._writable()
         self.connection.commit()
         self.connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         self.connection.execute("VACUUM")
@@ -170,6 +191,7 @@ class Store:
         return int(row["next_id"]) if row else 0
 
     def save_checkpoint(self, name: str, next_id: int) -> None:
+        self._writable()
         if not isinstance(next_id, int) or next_id < 0:
             raise StoreError("checkpoint must be a nonnegative integer")
         current = self.checkpoint(name)
@@ -187,6 +209,7 @@ class Store:
         return row["value"] if row else default
 
     def set_control(self, name: str, value: str) -> None:
+        self._writable()
         if not name or not isinstance(value, str):
             raise StoreError("control name and value must be strings")
         with self.connection:
