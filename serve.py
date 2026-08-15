@@ -11,7 +11,6 @@ from project_null.anonymize import Anonymizer
 from project_null.coverage import CoverageError, load as load_coverage
 from project_null.export import publish
 from project_null.generator import Generator
-from project_null.local_model import LocalModelError, OllamaShadowParaphraser
 from project_null.operations import Config, OperationsError, publish_run, write_audit
 from project_null.store import Store, StoreError
 from project_null.telegram import TelegramError, TelegramHTTP, TelegramShell
@@ -35,14 +34,6 @@ def main() -> int:
         if store.control("paused") is None:
             store.set_control("paused", "true")
         api = TelegramHTTP()
-        paraphraser = (
-            OllamaShadowParaphraser(
-                url=config.local_model_url,
-                model=config.local_model,
-                model_id=config.local_model_id,
-                timeout=config.local_model_timeout,
-            ) if config.local_model_mode == "shadow" else None
-        )
         shell = TelegramShell(
             store, Generator(
                 variables=config.probe_variables(),
@@ -52,7 +43,7 @@ def main() -> int:
             allowed_chat_ids=set(config.allowed_chat_ids),
             operator_user_ids=set(config.operator_user_ids),
             poll_timeout=config.poll_timeout, coverage=coverage,
-            runtime_status=config.public(), paraphraser=paraphraser)
+            runtime_status=config.public())
         identity = shell.startup()
         run = publish_run(config, coverage=coverage)
         store.set_control("run_id", run["run_id"])
