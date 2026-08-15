@@ -17,9 +17,6 @@ from .generator import (
     CATALOG_VERSION, CURRICULUM_VERSION, MAX_BURST, MIXED_POLICY_VERSION,
     catalog_hash,
 )
-from .local_model import (
-    MODEL_SCHEMA_VERSION, PROMPT_VERSION, REASONING_MODE, VALIDATOR_VERSION,
-)
 from .disposition import candidate_counts
 from .schema import (RAW_RETENTION, SCHEMA_VERSION, ScenarioFamily, parse_utc,
                      utc_now)
@@ -50,11 +47,6 @@ class Config:
     coverage_release_id: str | None = None
     aleph_evolution: int | None = None
     aleph_generation: int | None = None
-    local_model_mode: str = "disabled"
-    local_model_url: str | None = None
-    local_model: str | None = None
-    local_model_id: str | None = None
-    local_model_timeout: int = 20
 
     def __post_init__(self) -> None:
         if not 0 <= self.poll_timeout <= 50:
@@ -87,15 +79,6 @@ class Config:
                             for character in self.coverage_release_id))):
             raise OperationsError(
                 "NULL_ALEPH_COVERAGE_RELEASE must be a 20-character hexadecimal ID")
-        if self.local_model_mode not in {"disabled", "shadow"}:
-            raise OperationsError("NULL_LOCAL_MODEL_MODE must be disabled or shadow")
-        configured = self.local_model_url, self.local_model, self.local_model_id
-        if self.local_model_mode == "shadow" and not all(configured):
-            raise OperationsError("shadow mode requires URL, model alias and model ID")
-        if self.local_model_mode == "disabled" and any(configured):
-            raise OperationsError("disabled mode must not configure a local model")
-        if not 1 <= self.local_model_timeout <= 120:
-            raise OperationsError("NULL_LOCAL_MODEL_TIMEOUT must be between 1 and 120")
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] = os.environ):
@@ -122,7 +105,6 @@ class Config:
             aleph_bot_id = int(env.get("NULL_ALEPH_BOT_ID", ""))
             aleph_evolution = int(env.get("NULL_ALEPH_EVOLUTION", ""))
             aleph_generation = int(env.get("NULL_ALEPH_GENERATION", ""))
-            local_model_timeout = int(env.get("NULL_LOCAL_MODEL_TIMEOUT", "20"))
         except ValueError as error:
             raise OperationsError(
                 "poll, bot and Aleph evolution/generation values must be integers") from error
@@ -146,12 +128,6 @@ class Config:
                 env.get("NULL_ALEPH_COVERAGE_RELEASE", "").strip() or None),
             aleph_evolution=aleph_evolution,
             aleph_generation=aleph_generation,
-            local_model_mode=env.get(
-                "NULL_LOCAL_MODEL_MODE", "disabled").strip().casefold(),
-            local_model_url=env.get("NULL_LOCAL_MODEL_URL", "").strip() or None,
-            local_model=env.get("NULL_LOCAL_MODEL", "").strip() or None,
-            local_model_id=env.get("NULL_LOCAL_MODEL_ID", "").strip() or None,
-            local_model_timeout=local_model_timeout,
         )
 
     def public(self) -> dict:
@@ -181,16 +157,6 @@ class Config:
             "aleph_identity_label": (
                 f"evolution {self.aleph_evolution}/generation "
                 f"{self.aleph_generation}"),
-            "local_model": {
-                "mode": self.local_model_mode,
-                "configured": self.local_model_mode == "shadow",
-                "alias": self.local_model,
-                "id": self.local_model_id,
-                "prompt_version": PROMPT_VERSION,
-                "schema_version": MODEL_SCHEMA_VERSION,
-                "validator_version": VALIDATOR_VERSION,
-                "reasoning_mode": REASONING_MODE,
-            },
         }
 
     def probe_variables(self) -> dict[str, str]:
@@ -301,20 +267,6 @@ def record_peer_reply_evidence(store: Store, observed_at: str) -> dict:
     return {"captured": True, **evidence}
 
 
-def local_model_observations(store: Store) -> dict[str, int]:
-    """Return scrubbed shadow outcomes without retaining model text."""
-    counts = {"total": 0, "valid": 0, "rejected": 0, "fallback": 0}
-    for probe in store.list("probe"):
-        generator = probe.get("generator")
-        observation = (generator.get("local_model")
-                       if isinstance(generator, dict) else None)
-        status = (observation.get("status")
-                  if isinstance(observation, dict) else None)
-        if status in {"valid", "rejected", "fallback"}:
-            counts[status] += 1
-            counts["total"] += 1
-    return counts
-
 
 def ouroboros_snapshot(store: Store, config: Config,
                        coverage: CoveragePlan | None = None) -> dict:
@@ -384,10 +336,6 @@ def health_report(store: Store, api, config: Config,
                      "checkpoint": store.checkpoint("telegram")},
         "candidates": asdict(candidates),
         "curriculum": curriculum.public(),
-        "local_model": {
-            **config.public()["local_model"],
-            "observations": local_model_observations(store),
-        },
         "coverage": (coverage.public() if coverage is not None
                      else disabled_coverage()),
         "telegram": {"username": me.get("username"),

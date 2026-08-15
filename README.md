@@ -149,42 +149,6 @@ Single-family mode remains catalogue-only so a reviewer can rehearse one family
 without the coverage scheduler intervening. If no silhouette is configured,
 generation is the ordinary novelty curriculum.
 
-### Proteus: local inference shadow adapter
-
-Null's optional local inference participant is named **Proteus**. Proteus can
-ask one identity-pinned Ollama model for a candidate paraphrase after the
-deterministic curriculum has selected the complete challenge. The first
-implemented mode is shadow-only: Null validates and discards the candidate,
-while Telegram still receives the original deterministic question.
-
-The model sees only that rendered fallback question and addresses already
-present in it. It never receives the expected outcome, family, hidden intent,
-coverage artifact, Telegram identity, database row, token, review state or
-Aleph answer. Transport, schema and identity failures fall back without
-blocking the deterministic probe. Candidate text and hashes are not retained.
-The pinned model may use a low reasoning budget, but Null reads only the final
-schema-constrained answer and never parses, stores or logs Ollama's reasoning
-field. `/status`, `/ping` and health output expose aggregate valid, rejected
-and fallback counts without exposing generated text.
-
-```text
-NULL_LOCAL_MODEL_MODE=shadow
-NULL_LOCAL_MODEL_URL=http://127.0.0.1:11435
-NULL_LOCAL_MODEL=gpt-oss:120b
-NULL_LOCAL_MODEL_ID=a951a23b46a1
-NULL_LOCAL_MODEL_TIMEOUT=20
-```
-
-Only explicit loopback endpoints are accepted. In production `11435` is the
-exclusive reverse tunnel from [`OUROBOROS.MD`](OUROBOROS.MD), never a public
-Ollama listener. Selective delivery remains unimplemented.
-
-Every probe records the active Aleph evolution/generation. Each coverage-guided
-probe additionally records the silhouette, release, evaluation, topic,
-and target kind in raw generator provenance. Long-term exposure memory retains
-only the target ID and silhouette file hash, not the rendered question. Human
-review remains the only path from a result to a regression or factual proposal.
-
 ## Data and privacy
 
 Raw inbound questions and associated Telegram identifiers may be retained for at most **30 days** for debugging and review.

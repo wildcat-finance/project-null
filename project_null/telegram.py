@@ -18,8 +18,7 @@ from .capture import OutcomeCapture
 from .curriculum import derive as derive_curriculum, remember_exposure
 from .disposition import candidate_counts
 from .generator import Generator, MAX_BURST
-from .local_model import OllamaShadowParaphraser
-from .operations import local_model_observations, record_peer_reply_evidence
+from .operations import record_peer_reply_evidence
 from .schema import (
     Delivery, Feedback, OutcomeKind, ReviewDecision, ScenarioFamily,
     raw_expiry, stable_id, utc_now,
@@ -120,7 +119,6 @@ class TelegramShell:
                  limiter: RateLimiter | None = None, poll_timeout: int = 30,
                  coverage: CoveragePlan | None = None,
                  runtime_status: dict[str, object] | None = None,
-                 paraphraser: OllamaShadowParaphraser | None = None,
                  monotonic_clock: Callable[[], float] = time.monotonic):
         if not re.fullmatch(r"[A-Za-z0-9_]{5,32}", aleph_username):
             raise TelegramError("aleph_username is invalid")
@@ -147,7 +145,6 @@ class TelegramShell:
         self.poll_timeout = poll_timeout
         self.coverage = coverage
         self.runtime_status = dict(runtime_status or {})
-        self.paraphraser = paraphraser
         self.monotonic_clock = monotonic_clock
         self.started_monotonic = monotonic_clock()
         self.capture = OutcomeCapture(store, clock)
@@ -563,8 +560,6 @@ class TelegramShell:
                     f"coverage_targets={len(self.coverage.targets)}"
                     if self.coverage is not None else "disabled")
         identity = self.runtime_status.get("aleph_identity_label", "unknown")
-        model = self.runtime_status.get("local_model", {})
-        observations = local_model_observations(self.store)
         self._reply(
             chat_id, message_id,
             f"Null is {'paused' if paused else 'running'}; "
@@ -575,10 +570,6 @@ class TelegramShell:
             f"candidate_pile={candidates.unresolved}; "
             f"candidate_resolved={candidates.resolved}; "
             f"curriculum={curriculum['version']}; tiers={tier_counts}; "
-            f"local_model={model.get('mode', 'disabled')}; "
-            f"shadow={observations['total']}/valid:{observations['valid']}/"
-            f"rejected:{observations['rejected']}/"
-            f"fallback:{observations['fallback']}; "
             f"aleph={identity}; coverage={coverage}; "
             f"checkpoint={self.store.checkpoint('telegram')}.")
 
@@ -595,8 +586,6 @@ class TelegramShell:
                     f"{self.coverage.generation}"
                     if self.coverage is not None else "disabled")
         status = self.runtime_status
-        model = status.get("local_model", {})
-        observations = local_model_observations(self.store)
         lines = [
             "Pong!",
             f"Alive: {_uptime(self.monotonic_clock() - self.started_monotonic)}",
@@ -608,13 +597,6 @@ class TelegramShell:
             f"catalog={status.get('catalog_sha256', 'unknown')}; "
             f"policy={status.get('mixed_policy_version', 'unknown')}",
             f"Curriculum: {curriculum['version']}",
-            f"Proteus: {model.get('mode', 'disabled')}; "
-            f"alias={model.get('alias') or 'none'}; "
-            f"id={model.get('id') or 'none'}; "
-            f"shadow total={observations['total']}, "
-            f"valid={observations['valid']}, "
-            f"rejected={observations['rejected']}, "
-            f"fallback={observations['fallback']}",
             f"Coverage: {coverage}",
             f"Review: unreviewed={unresolved}; "
             f"candidate_pile={candidates.unresolved}; "
@@ -640,23 +622,10 @@ class TelegramShell:
             coverage=self.coverage)
         sent = 0
         for item in generated:
-            item = self._observe_paraphrase(item, curriculum.seen_texts)
             if self._send_probe(chat_id, command_message_id, item):
                 sent += 1
         self._reply(chat_id, command_message_id,
                     f"Prepared {count}; sent {sent}; duplicates skipped {count - sent}.")
-
-    def _observe_paraphrase(self, item, seen_texts):
-        if self.paraphraser is None:
-            return item
-        addresses = tuple(re.findall(r"\b0x[0-9a-fA-F]{40}\b", item.probe.text))
-        observation = self.paraphraser.observe(
-            item.probe.text,
-            allowed_addresses=addresses,
-            forbidden_questions=seen_texts,
-        )
-        return replace(item, probe=replace(item.probe, generator={
-            **item.probe.generator, "local_model": observation.public()}))
 
     def _send_probe(self, chat_id: int, command_message_id: int, item) -> bool:
         probe_id = item.probe.probe_id
